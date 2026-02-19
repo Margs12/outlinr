@@ -242,10 +242,9 @@ const MAINLAND_ONLY_IDS = new Set([
 
 /**
  * For a MultiPolygon feature, return a new feature containing only the
- * single polygon whose exterior ring has the most coordinate points (mainland).
- * Point count is more reliable than bounding-box area because degenerate
- * boundary polygons (e.g. convex hulls) have few points but large bounding
- * boxes, whereas the actual mainland coastline always has the most detail.
+ * mainland polygon. Uses bbox_area × point_count as a combined score so
+ * that neither degenerate convex-hull polygons (large bbox, few points)
+ * nor tiny islands (small bbox, many points) win over the actual mainland.
  * Safe to call on a Polygon feature — returns it unchanged.
  */
 export function keepLargestPolygon(feat) {
@@ -253,11 +252,21 @@ export function keepLargestPolygon(feat) {
   if (type !== 'MultiPolygon') return feat;
 
   let largest = coordinates[0];
-  let mostPoints = 0;
+  let bestScore = 0;
 
   for (const polygon of coordinates) {
-    const pointCount = polygon[0].length; // Exterior ring point count
-    if (pointCount > mostPoints) { mostPoints = pointCount; largest = polygon; }
+    const ring = polygon[0];
+    let minLon = Infinity, maxLon = -Infinity;
+    let minLat = Infinity, maxLat = -Infinity;
+    for (const [lon, lat] of ring) {
+      if (lon < minLon) minLon = lon;
+      if (lon > maxLon) maxLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    }
+    const area  = (maxLon - minLon) * (maxLat - minLat);
+    const score = area * ring.length;
+    if (score > bestScore) { bestScore = score; largest = polygon; }
   }
 
   return { ...feat, geometry: { type: 'Polygon', coordinates: largest } };
@@ -366,11 +375,13 @@ export async function loadCountries() {
   const collection = feature(topology, topology.objects.countries);
 
   const countries = [];
+  const seenIds   = new Set(); // Guard against duplicate features in the TopoJSON
 
   for (const feat of collection.features) {
     if (!feat.id || !feat.geometry) continue;
 
     const id   = parseInt(feat.id, 10);
+    if (seenIds.has(id)) continue; // Skip duplicate entries (e.g. territory features)
     const info = COUNTRY_INFO[id];
     if (!info) continue; // Not in our name list — skip
 
@@ -378,6 +389,7 @@ export async function loadCountries() {
     const svgPath = featureToSvgPath(processedFeat);
     if (!svgPath) continue; // Degenerate geometry — skip
 
+    seenIds.add(id);
     countries.push({
       id,
       name:    info.name,
