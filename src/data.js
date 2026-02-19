@@ -165,6 +165,7 @@ const COUNTRY_INFO = {
   804: { name: 'Ukraine',                           aliases: ['ukraina'] },
   784: { name: 'United Arab Emirates',              aliases: ['uae', 'emirates'] },
   807: { name: 'North Macedonia',                   aliases: ['macedonia', 'fyrom'] },
+  818: { name: 'Egypt',                             aliases: ['misr', 'arab republic of egypt'] },
   826: { name: 'United Kingdom',                    aliases: ['uk', 'great britain', 'britain', 'england'] },
   834: { name: 'Tanzania',                          aliases: [] },
   840: { name: 'United States',                     aliases: ['usa', 'united states of america', 'us', 'america'] },
@@ -205,12 +206,12 @@ const EASY_IDS = new Set([
   458,  // Malaysia
   484,  // Mexico
   496,  // Mongolia
-  554,  // New Zealand
   578,  // Norway
+  818,  // Egypt
   604,  // Peru
   608,  // Philippines
+  616,  // Poland
   620,  // Portugal
-  643,  // Russia
   682,  // Saudi Arabia
   410,  // South Korea
   710,  // South Africa
@@ -227,9 +228,12 @@ const EASY_IDS = new Set([
 // Countries where distant overseas territories make the mainland appear tiny.
 // For these, only the largest polygon (by bounding-box area) is displayed.
 const MAINLAND_ONLY_IDS = new Set([
+  36,   // Australia     — Heard Island, Cocos Islands, Christmas Island, Norfolk Island
   208,  // Denmark       — Faroe Islands
   250,  // France        — French Guiana, Martinique, Guadeloupe, Réunion, etc.
+  578,  // Norway        — Svalbard
   620,  // Portugal      — Azores, Madeira
+  710,  // South Africa  — Marion Island, Prince Edward Islands
   724,  // Spain         — Canary Islands
   840,  // United States — Alaska, Hawaii
 ]);
@@ -238,7 +242,10 @@ const MAINLAND_ONLY_IDS = new Set([
 
 /**
  * For a MultiPolygon feature, return a new feature containing only the
- * single polygon with the largest bounding-box area (mainland).
+ * single polygon whose exterior ring has the most coordinate points (mainland).
+ * Point count is more reliable than bounding-box area because degenerate
+ * boundary polygons (e.g. convex hulls) have few points but large bounding
+ * boxes, whereas the actual mainland coastline always has the most detail.
  * Safe to call on a Polygon feature — returns it unchanged.
  */
 export function keepLargestPolygon(feat) {
@@ -246,20 +253,11 @@ export function keepLargestPolygon(feat) {
   if (type !== 'MultiPolygon') return feat;
 
   let largest = coordinates[0];
-  let largestArea = 0;
+  let mostPoints = 0;
 
   for (const polygon of coordinates) {
-    const ring = polygon[0]; // Exterior ring
-    let minLon = Infinity, maxLon = -Infinity;
-    let minLat = Infinity, maxLat = -Infinity;
-    for (const [lon, lat] of ring) {
-      if (lon < minLon) minLon = lon;
-      if (lon > maxLon) maxLon = lon;
-      if (lat < minLat) minLat = lat;
-      if (lat > maxLat) maxLat = lat;
-    }
-    const area = (maxLon - minLon) * (maxLat - minLat);
-    if (area > largestArea) { largestArea = area; largest = polygon; }
+    const pointCount = polygon[0].length; // Exterior ring point count
+    if (pointCount > mostPoints) { mostPoints = pointCount; largest = polygon; }
   }
 
   return { ...feat, geometry: { type: 'Polygon', coordinates: largest } };
@@ -343,7 +341,7 @@ export function featureToSvgPath(feat) {
       ring
         .map(([lon, lat], i) => {
           const [x, y] = project([lon, lat]);
-          return `${i === 0 ? 'M' : 'L'}${Math.round(x)},${Math.round(y)}`;
+          return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
         })
         .join(' ') + ' Z'
     )
