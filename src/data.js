@@ -229,6 +229,7 @@ const EASY_IDS = new Set([
 // For these, only the largest polygon (by bounding-box area) is displayed.
 const MAINLAND_ONLY_IDS = new Set([
   36,   // Australia     — Heard Island, Cocos Islands, Christmas Island, Norfolk Island
+  152,  // Chile         — Easter Island, Juan Fernández Islands
   208,  // Denmark       — Faroe Islands
   250,  // France        — French Guiana, Martinique, Guadeloupe, Réunion, etc.
   578,  // Norway        — Svalbard
