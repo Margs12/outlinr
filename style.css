@@ -1,0 +1,262 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #0c0c0c;
+  color: #f0f0f0;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  padding: 2rem 1rem;
+  width: 100%;
+  max-width: 520px;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+h1 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #f0f0f0;
+}
+
+#streak-display {
+  font-size: 0.8rem;
+  color: #555;
+  letter-spacing: 0.05em;
+}
+
+#streak-count {
+  font-weight: 700;
+  color: #f0f0f0;
+  margin-left: 0.25rem;
+}
+
+/* ── Mode toggle ─────────────────────────────────────────── */
+#mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mode-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: inherit;
+  letter-spacing: 0.06em;
+  color: #333;
+  padding: 0.2rem 0.4rem;
+  transition: color 0.15s;
+}
+
+.mode-btn:hover {
+  color: #888;
+}
+
+.mode-btn.active {
+  color: #f0f0f0;
+  font-weight: 700;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  gap: 0.6rem;
+}
+
+/* ── Shape container ─────────────────────────────────────── */
+#shape-container {
+  width: min(420px, 90vw);
+  height: min(420px, 90vw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#shape-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+#country-path {
+  fill: #d8d8d8;
+  stroke: none;
+}
+
+/* ── Correct animation ───────────────────────────────────── */
+#shape-svg.correct {
+  animation: svg-correct-scale 0.55s ease-out forwards;
+}
+
+#shape-svg.correct #country-path {
+  animation: fill-correct 0.55s ease-out forwards;
+}
+
+@keyframes svg-correct-scale {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+@keyframes fill-correct {
+  0%   { fill: #ffffff; }
+  100% { fill: #d8d8d8; }
+}
+
+/* ── Milestone animation (every 5 streak) ───────────────── */
+#shape-svg.milestone {
+  animation:
+    svg-milestone-scale 0.9s ease-out forwards,
+    svg-milestone-glow  0.9s ease-out forwards;
+}
+
+#shape-svg.milestone #country-path {
+  animation: fill-milestone 0.9s ease-out forwards;
+}
+
+@keyframes svg-milestone-scale {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+
+@keyframes svg-milestone-glow {
+  0%   { filter: none; }
+  25%  { filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.6)); }
+  100% { filter: none; }
+}
+
+@keyframes fill-milestone {
+  0%   { fill: #ffffff; }
+  100% { fill: #d8d8d8; }
+}
+
+/* ── Completion animation (easy mode perfect streak) ────── */
+#shape-svg.completion {
+  animation:
+    svg-completion-scale 2.8s ease-out forwards,
+    svg-completion-glow  2.8s ease-out forwards;
+}
+
+#shape-svg.completion #country-path {
+  animation: fill-completion 2.8s ease-out forwards;
+}
+
+@keyframes svg-completion-scale {
+  0%   { transform: scale(1); }
+  15%  { transform: scale(1.10); }
+  100% { transform: scale(1.06); }
+}
+
+@keyframes svg-completion-glow {
+  0%   { filter: none; }
+  15%  { filter: drop-shadow(0 0 36px rgba(255, 255, 255, 0.85)); }
+  60%  { filter: drop-shadow(0 0 24px rgba(255, 255, 255, 0.50)); }
+  100% { filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.30)); }
+}
+
+@keyframes fill-completion {
+  0%   { fill: #ffffff; }
+  100% { fill: #eeeeee; }
+}
+
+/* ── Input ───────────────────────────────────────────────── */
+#input-area {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid #333;
+  padding-bottom: 0.4rem;
+}
+
+#prompt {
+  color: #555;
+  font-size: 1rem;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+#guess-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #f0f0f0;
+  font-family: inherit;
+  font-size: 1rem;
+  outline: none;
+  letter-spacing: 0.03em;
+  caret-color: #f0f0f0;
+}
+
+#guess-input::placeholder {
+  color: #333;
+}
+
+#guess-input:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+#guess-input.wrong {
+  animation: shake 0.38s ease-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-7px); }
+  60%       { transform: translateX(7px); }
+  80%       { transform: translateX(-4px); }
+}
+
+/* ── Skip hint ───────────────────────────────────────────── */
+#skip-hint {
+  font-size: 0.72rem;
+  color: #333;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+/* ── Feedback ────────────────────────────────────────────── */
+#feedback {
+  min-height: 1.4rem;
+  font-size: 0.85rem;
+  color: #555;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+#feedback.reveal {
+  color: #f0f0f0;
+  font-weight: 700;
+  animation: fade-in 0.15s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

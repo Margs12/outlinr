@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>outlinr</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>outlinr</h1>
+      <nav id="mode-toggle" aria-label="Game mode">
+        <button class="mode-btn active" data-mode="easy">easy</button>
+        <button class="mode-btn" data-mode="hard">hard</button>
+      </nav>
+      <div id="streak-display">
+        streak <span id="streak-count">0</span>
+      </div>
+    </header>
+
+    <main>
+      <div id="shape-container">
+        <svg
+          id="shape-svg"
+          viewBox="0 0 200 200"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-label="Country shape to identify"
+        >
+          <path id="country-path" d="" fill-rule="evenodd" />
+        </svg>
+      </div>
+
+      <div id="input-area">
+        <span id="prompt">&gt;</span>
+        <input
+          type="text"
+          id="guess-input"
+          placeholder="country name..."
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          autofocus
+        />
+      </div>
+
+      <p id="skip-hint">press enter to skip</p>
+      <div id="feedback" aria-live="polite"></div>
+    </main>
+  </div>
+
+  <script type="module" src="src/game.js"></script>
+</body>
+</html>

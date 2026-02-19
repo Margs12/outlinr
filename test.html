@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>sguesser — tests</title>
+  <style>
+    body   { font-family: monospace; padding: 2rem; background: #0f0f1a; color: #c8cedf; line-height: 1.7; }
+    h1     { color: #7b8ab8; margin-bottom: 0.25rem; }
+    p.meta { color: #3e4a68; font-size: 0.85rem; margin-bottom: 2rem; }
+    .suite { margin-top: 1.5rem; color: #4a5a9a; font-weight: bold; font-size: 0.9rem; letter-spacing: 0.08em; }
+    .pass  { color: #48bb78; }
+    .fail  { color: #e05555; font-weight: bold; }
+    #summary { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #1e2a40; font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>sguesser — test suite</h1>
+  <p class="meta">Open browser console for stack traces on failures.</p>
+  <div id="results"></div>
+  <div id="summary"></div>
+
+  <script type="module">
+    import { normalise, matches, shuffle } from './src/utils.js';
+    import { featureToSvgPath, keepLargestPolygon } from './src/data.js';
+
+    // ── Minimal test harness ───────────────────────────────────────────────────
+
+    const out     = document.getElementById('results');
+    const sumEl   = document.getElementById('summary');
+    let passed = 0, failed = 0;
+
+    function suite(name) {
+      const el = document.createElement('div');
+      el.className = 'suite';
+      el.textContent = `▸ ${name}`;
+      out.appendChild(el);
+    }
+
+    function test(desc, fn) {
+      const el = document.createElement('div');
+      try {
+        fn();
+        passed++;
+        el.className = 'pass';
+        el.textContent = `  ✓ ${desc}`;
+      } catch (err) {
+        failed++;
+        el.className = 'fail';
+        el.textContent = `  ✗ ${desc}  —  ${err.message}`;
+        console.error(desc, err);
+      }
+      out.appendChild(el);
+    }
+
+    function assert(condition, msg) {
+      if (!condition) throw new Error(msg ?? 'assertion failed');
+    }
+
+    function assertEqual(a, b, msg) {
+      if (a !== b) throw new Error(msg ?? `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    function polygon(coords) {
+      return { id: '1', geometry: { type: 'Polygon', coordinates: [coords] } };
+    }
+
+    function multiPolygon(polygons) {
+      return { id: '1', geometry: { type: 'MultiPolygon', coordinates: polygons.map(c => [c]) } };
+    }
+
+    // Simple unit square: 0°–1° lon, 0°–1° lat
+    const unitSquare = [
+      [0, 0], [1, 0], [1, 1], [0, 1], [0, 0],
+    ];
+
+    // 10° × 10° box
+    const bigBox = [
+      [0, 0], [10, 0], [10, 10], [0, 10], [0, 0],
+    ];
+
+    // ── normalise() ────────────────────────────────────────────────────────────
+
+    suite('normalise()');
+
+    test('lowercases', () => assertEqual(normalise('ITALY'), 'italy'));
+    test('trims leading/trailing spaces', () => assertEqual(normalise('  france  '), 'france'));
+    test('collapses internal spaces', () => assertEqual(normalise('united  states'), 'united states'));
+    test('strips acute accent', () => assertEqual(normalise('café'), 'cafe'));
+    test('strips circumflex', () => assertEqual(normalise('côte'), 'cote'));
+    test("handles full Ivory Coast alias", () => assertEqual(normalise("Côte D'Ivoire"), "cote d'ivoire"));
+    test('handles São Tomé', () => assertEqual(normalise('São Tomé'), 'sao tome'));
+    test('handles empty string', () => assertEqual(normalise(''), ''));
+    test('handles already-normalised string', () => assertEqual(normalise('germany'), 'germany'));
+
+    // ── matches() ─────────────────────────────────────────────────────────────
+
+    suite('matches()');
+
+    const italy  = { name: 'Italy',  aliases: ['italia'] };
+    const usa    = { name: 'United States', aliases: ['usa', 'us', 'america', 'united states of america'] };
+    const ivory  = { name: 'Ivory Coast', aliases: ["cote d'ivoire", "côte d'ivoire"] };
+    const iran   = { name: 'Iran',   aliases: ['persia'] };
+    const iraq   = { name: 'Iraq',   aliases: [] };
+    const japan  = { name: 'Japan',  aliases: ['nippon', 'nihon'] };
+
+    test('exact name match', () => assert(matches('Italy', italy)));
+    test('case-insensitive name match', () => assert(matches('ITALY', italy)));
+    test('alias match', () => assert(matches('italia', italy)));
+    test('alias match case-insensitive', () => assert(matches('ITALIA', italy)));
+    test('usa abbreviation', () => assert(matches('usa', usa)));
+    test('full official name', () => assert(matches('United States of America', usa)));
+    test('leading/trailing spaces', () => assert(matches('  Italy  ', italy)));
+    test('diacritic alias', () => assert(matches("côte d'ivoire", ivory)));
+    test('diacritic-free alias', () => assert(matches("cote d'ivoire", ivory)));
+    test('alias with uppercase diacritic', () => assert(matches("Côte D'Ivoire", ivory)));
+    test('Japan alias nippon', () => assert(matches('Nippon', japan)));
+    test('Iran does NOT match Iraq', () => assert(!matches('Iran', iraq)));
+    test('Iraq does NOT match Iran', () => assert(!matches('Iraq', iran)));
+    test('wrong country returns false', () => assert(!matches('France', italy)));
+    test('empty string returns false', () => assert(!matches('', italy)));
+    test('partial match returns false', () => assert(!matches('Ital', italy)));
+
+    // ── shuffle() ─────────────────────────────────────────────────────────────
+
+    suite('shuffle()');
+
+    test('returns same length', () => {
+      const arr = [1, 2, 3, 4, 5];
+      assertEqual(shuffle(arr).length, arr.length);
+    });
+
+    test('contains all original elements', () => {
+      const arr = [1, 2, 3, 4, 5];
+      const result = shuffle(arr).slice().sort((a, b) => a - b);
+      assertEqual(JSON.stringify(result), JSON.stringify([1, 2, 3, 4, 5]));
+    });
+
+    test('does not mutate the input array', () => {
+      const arr = [1, 2, 3];
+      const copy = [...arr];
+      shuffle(arr);
+      assertEqual(JSON.stringify(arr), JSON.stringify(copy));
+    });
+
+    test('handles empty array', () => {
+      assertEqual(shuffle([]).length, 0);
+    });
+
+    test('handles single-element array', () => {
+      assertEqual(shuffle([42])[0], 42);
+    });
+
+    // ── featureToSvgPath() ─────────────────────────────────────────────────────
+
+    suite('featureToSvgPath()');
+
+    test('normal polygon returns non-empty path', () => {
+      const path = featureToSvgPath(polygon(bigBox));
+      assert(path.length > 0, 'expected non-empty path');
+      assert(path.startsWith('M'), 'path should start with M');
+      assert(path.endsWith('Z'), 'path should end with Z');
+    });
+
+    test('path contains only valid SVG path commands', () => {
+      const path = featureToSvgPath(polygon(bigBox));
+      assert(/^[ML\d\s.,Z-]+$/.test(path), 'unexpected characters in path');
+    });
+
+    test('lonRange > 180 returns empty string (antimeridian guard)', () => {
+      const antimeridian = [
+        [-170, 0], [170, 0], [170, 10], [-170, 10], [-170, 0],
+      ];
+      assertEqual(featureToSvgPath(polygon(antimeridian)), '');
+    });
+
+    test('extremely flat polygon (projH < 4 after aspect-ratio scaling) returns empty string', () => {
+      // 150° wide × 2° tall at 30°N — cosine correction gives correctedLonRange ≈ 129°,
+      // so scale = 170/129 ≈ 1.32, projH = 2 * 1.32 ≈ 2.6 → below the 4px guard.
+      const extremelyFlat = [
+        [0, 30], [150, 30], [150, 32], [0, 32], [0, 30],
+      ];
+      assertEqual(featureToSvgPath(polygon(extremelyFlat)), '');
+    });
+
+    test('MultiPolygon renders all sub-polygons (multiple M…Z segments)', () => {
+      const path = featureToSvgPath(multiPolygon([bigBox, bigBox.map(([x, y]) => [x + 20, y + 20])]));
+      const mCount = (path.match(/M/g) || []).length;
+      assert(mCount >= 2, `expected at least 2 M commands, got ${mCount}`);
+    });
+
+    // ── keepLargestPolygon() ───────────────────────────────────────────────────
+
+    suite('keepLargestPolygon()');
+
+    const smallBox = [[0,0],[1,0],[1,1],[0,1],[0,0]];
+    const largeBox = [[0,0],[20,0],[20,20],[0,20],[0,0]];
+
+    test('Polygon feature is returned unchanged', () => {
+      const feat = polygon(bigBox);
+      const result = keepLargestPolygon(feat);
+      assertEqual(result.geometry.type, 'Polygon');
+      assertEqual(result.geometry.coordinates, feat.geometry.coordinates);
+    });
+
+    test('MultiPolygon: selects the larger polygon', () => {
+      const feat   = multiPolygon([smallBox, largeBox]);
+      const result = keepLargestPolygon(feat);
+      assertEqual(result.geometry.type, 'Polygon');
+      // The returned polygon's exterior ring should be largeBox
+      assertEqual(JSON.stringify(result.geometry.coordinates[0]), JSON.stringify(largeBox));
+    });
+
+    test('MultiPolygon with one polygon returns that polygon', () => {
+      const feat   = multiPolygon([bigBox]);
+      const result = keepLargestPolygon(feat);
+      assertEqual(result.geometry.type, 'Polygon');
+    });
+
+    test('original feature is not mutated', () => {
+      const feat = multiPolygon([smallBox, largeBox]);
+      const originalType = feat.geometry.type;
+      keepLargestPolygon(feat);
+      assertEqual(feat.geometry.type, originalType);
+    });
+
+    // ── Summary ────────────────────────────────────────────────────────────────
+
+    const total = passed + failed;
+    sumEl.innerHTML = `
+      <strong>${total} test${total !== 1 ? 's' : ''}:
+        <span class="${failed ? 'fail' : 'pass'}">${passed} passed</span>
+        ${failed ? `, <span class="fail">${failed} failed</span>` : ''}
+      </strong>
+    `;
+  </script>
+</body>
+</html>
