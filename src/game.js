@@ -9,6 +9,16 @@ import { showCountry, playAnimation, updateStreak,
          updateModeButtons } from './renderer.js';
 import { playCorrect, playMilestone, playWrong, playCompletion, unlockAudio } from './audio.js';
 import { normalise, matches, shuffle }           from './utils.js';
+import { isValidMode, getCountryPool, classifyCorrectGuess } from './gameState.js';
+
+// ── Timing constants ──────────────────────────────────────────────────────────
+
+const TIMINGS = {
+  CORRECT_MS:      550,
+  MILESTONE_MS:    900,
+  COMPLETION_MS:   3200,
+  STREAK_RESET_MS: 1500,
+};
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -26,7 +36,7 @@ let _cachedPool = null;
 
 function countryPool() {
   if (!_cachedPool) {
-    _cachedPool = state.countries.filter(c => c.tier === state.mode);
+    _cachedPool = getCountryPool(state.countries, state.mode);
   }
   return _cachedPool;
 }
@@ -76,7 +86,7 @@ function handleStreakReset(doShake) {
   state.animating = true;
 
   updateStreak(0);
-  playWrong();
+  playWrong().catch(e => console.error('[audio] playWrong failed:', e));
   setInputLocked(true);
   if (doShake) shakeInput();
   showAnswer(state.current.name);
@@ -86,7 +96,7 @@ function handleStreakReset(doShake) {
     advance();
     state.animating = false;
     setInputLocked(false);
-  }, 1500);
+  }, TIMINGS.STREAK_RESET_MS);
 }
 
 /**
@@ -105,34 +115,35 @@ function handleGuess(raw) {
     state.animating = true;
 
     // Completion: player has correctly named every easy-mode country in a row
-    const isCompletion = state.mode === 'easy' && state.streak === countryPool().length;
-    const isMilestone  = !isCompletion && state.streak % 5 === 0;
-    const delay        = isCompletion ? 3200 : (isMilestone ? 900 : 550);
+    const result       = classifyCorrectGuess(state.mode, state.streak, countryPool().length);
+    const isCompletion = result === 'completion';
+    const isMilestone  = result === 'milestone';
 
     setInputLocked(true);
     updateStreak(state.streak);
 
     if (isCompletion) {
-      playCompletion();
+      playCompletion().catch(e => console.error('[audio] playCompletion failed:', e));
       playAnimation('completion');
       showAnswer('easy mode complete!');
       setTimeout(() => {
         hideAnswer();
-        setMode('hard'); // setMode resets animating, unlocks input, and calls advance()
-      }, delay);
+        state.animating = false; // Clear before setMode so the animating guard passes
+        setMode('hard');         // Invalidates cache, reshuffles, and calls advance()
+      }, TIMINGS.COMPLETION_MS);
     } else {
       if (isMilestone) {
-        playMilestone();
+        playMilestone().catch(e => console.error('[audio] playMilestone failed:', e));
         playAnimation('milestone');
       } else {
-        playCorrect();
+        playCorrect().catch(e => console.error('[audio] playCorrect failed:', e));
         playAnimation('correct');
       }
       setTimeout(() => {
         advance();
         state.animating = false;
         setInputLocked(false);
-      }, delay);
+      }, isMilestone ? TIMINGS.MILESTONE_MS : TIMINGS.CORRECT_MS);
     }
 
   } else {
@@ -143,6 +154,11 @@ function handleGuess(raw) {
 // ── Mode switching ────────────────────────────────────────────────────────────
 
 function setMode(mode) {
+  if (!isValidMode(mode)) {
+    console.warn(`[game] setMode called with invalid mode: "${mode}"`);
+    return;
+  }
+  if (state.animating) return; // Block mode switch during active animation
   if (mode === state.mode) return;
   state.mode   = mode;
   _cachedPool  = null; // Invalidate cache on mode switch
@@ -186,7 +202,7 @@ async function init() {
     state.remaining = shuffle(countryPool());
     advance();
   } catch (err) {
-    showLoadError(err.message);
+    showLoadError(err.message, init);
   }
 }
 

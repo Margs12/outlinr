@@ -21,7 +21,8 @@
 
   <script type="module">
     import { normalise, matches, shuffle } from './src/utils.js';
-    import { featureToSvgPath, keepLargestPolygon } from './src/data.js';
+    import { featureToSvgPath, keepLargestPolygon, loadCountries } from './src/data.js';
+    import { isValidMode, getCountryPool, classifyCorrectGuess } from './src/gameState.js';
 
     // ── Minimal test harness ───────────────────────────────────────────────────
 
@@ -223,6 +224,179 @@
       const originalType = feat.geometry.type;
       keepLargestPolygon(feat);
       assertEqual(feat.geometry.type, originalType);
+    });
+
+    // ── testAsync helper ───────────────────────────────────────────────────────
+    // Mirrors test() but supports async functions and awaits them before logging.
+
+    async function testAsync(desc, fn) {
+      const el = document.createElement('div');
+      try {
+        await fn();
+        passed++;
+        el.className = 'pass';
+        el.textContent = `  ✓ ${desc}`;
+      } catch (err) {
+        failed++;
+        el.className = 'fail';
+        el.textContent = `  ✗ ${desc}  —  ${err.message}`;
+        console.error(desc, err);
+      }
+      out.appendChild(el);
+    }
+
+    // ── matches() — edge cases (Issue 12) ─────────────────────────────────────
+
+    suite('matches() — edge cases');
+
+    const southKorea = { name: 'South Korea', aliases: ['korea', 'republic of korea', 'rok'] };
+    const northKorea = { name: 'North Korea', aliases: ['dprk'] };
+
+    test('"Korea" matches South Korea via alias', () =>
+      assert(matches('Korea', southKorea)));
+    test('"Korea" does NOT match North Korea', () =>
+      assert(!matches('Korea', northKorea)));
+    test('partial input "South" returns false (no substring matching)', () =>
+      assert(!matches('South', southKorea)));
+    test('whitespace-only input returns false', () =>
+      assert(!matches('   ', italy)));
+
+    // ── gameState helpers (Issues 9 & 10) ─────────────────────────────────────
+
+    suite('isValidMode()');
+
+    test('"easy" is valid', () => assert(isValidMode('easy')));
+    test('"hard" is valid', () => assert(isValidMode('hard')));
+    test('"medium" is invalid', () => assert(!isValidMode('medium')));
+    test('undefined is invalid', () => assert(!isValidMode(undefined)));
+    test('empty string is invalid', () => assert(!isValidMode('')));
+    test('null is invalid', () => assert(!isValidMode(null)));
+
+    suite('getCountryPool()');
+
+    const sampleCountries = [
+      { name: 'France',   tier: 'easy' },
+      { name: 'Germany',  tier: 'easy' },
+      { name: 'Albania',  tier: 'hard' },
+      { name: 'Djibouti', tier: 'hard' },
+    ];
+
+    test('easy mode returns only easy-tier countries', () => {
+      const pool = getCountryPool(sampleCountries, 'easy');
+      assertEqual(pool.length, 2);
+      assert(pool.every(c => c.tier === 'easy'));
+    });
+
+    test('hard mode returns only hard-tier countries', () => {
+      const pool = getCountryPool(sampleCountries, 'hard');
+      assertEqual(pool.length, 2);
+      assert(pool.every(c => c.tier === 'hard'));
+    });
+
+    test('empty country list returns empty pool', () => {
+      assertEqual(getCountryPool([], 'easy').length, 0);
+    });
+
+    test('does not mutate the input array', () => {
+      const copy = [...sampleCountries];
+      getCountryPool(sampleCountries, 'easy');
+      assertEqual(sampleCountries.length, copy.length);
+    });
+
+    suite('classifyCorrectGuess()');
+
+    test('completion when easy streak equals pool size', () =>
+      assertEqual(classifyCorrectGuess('easy', 5, 5), 'completion'));
+    test('not completion when streak is less than pool size', () =>
+      assertEqual(classifyCorrectGuess('easy', 4, 5), 'correct'));
+    test('hard mode never triggers completion even if streak equals pool size', () =>
+      assertEqual(classifyCorrectGuess('hard', 5, 5), 'milestone')); // 5 % 5 === 0
+    test('milestone at multiples of 5', () =>
+      assertEqual(classifyCorrectGuess('easy', 5, 100), 'milestone'));
+    test('milestone at 10', () =>
+      assertEqual(classifyCorrectGuess('hard', 10, 50), 'milestone'));
+    test('correct for non-milestone non-completion streak', () =>
+      assertEqual(classifyCorrectGuess('easy', 3, 100), 'correct'));
+    test('correct at streak 1', () =>
+      assertEqual(classifyCorrectGuess('hard', 1, 50), 'correct'));
+    test('completion takes priority over milestone (e.g. pool of 5, streak 5)', () =>
+      assertEqual(classifyCorrectGuess('easy', 5, 5), 'completion')); // 5 % 5 === 0 but completion wins
+
+    // ── loadCountries() — error paths (Issue 11) ──────────────────────────────
+
+    suite('loadCountries() — error paths');
+
+    await testAsync('throws friendly message on HTTP error (non-OK response)', async () => {
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = async () => ({ ok: false, status: 500 });
+      try {
+        await loadCountries();
+        throw new Error('expected loadCountries() to throw');
+      } catch (err) {
+        assert(
+          err.message.includes('500'),
+          `expected error to mention status 500, got: "${err.message}"`
+        );
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
+
+    await testAsync('throws friendly message when fetch times out (AbortError)', async () => {
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = async () => {
+        const err = new DOMException('The operation was aborted.', 'AbortError');
+        throw err;
+      };
+      try {
+        await loadCountries();
+        throw new Error('expected loadCountries() to throw');
+      } catch (err) {
+        assert(
+          err.message.toLowerCase().includes('timed out'),
+          `expected timeout message, got: "${err.message}"`
+        );
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
+
+    await testAsync('propagates non-abort network errors unchanged', async () => {
+      const origFetch = globalThis.fetch;
+      const networkErr = new TypeError('Failed to fetch');
+      globalThis.fetch = async () => { throw networkErr; };
+      try {
+        await loadCountries();
+        throw new Error('expected loadCountries() to throw');
+      } catch (err) {
+        assert(err === networkErr, `expected the original error to propagate, got: "${err.message}"`);
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
+
+    await testAsync('throws when response has no valid country data', async () => {
+      const origFetch = globalThis.fetch;
+      // Valid HTTP 200 but TopoJSON with no recognisable country IDs
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({
+          type: 'Topology',
+          objects: { countries: { type: 'GeometryCollection', geometries: [] } },
+          arcs: [],
+        }),
+      });
+      try {
+        await loadCountries();
+        throw new Error('expected loadCountries() to throw');
+      } catch (err) {
+        assert(
+          err.message.toLowerCase().includes('no country'),
+          `expected "no country" message, got: "${err.message}"`
+        );
+      } finally {
+        globalThis.fetch = origFetch;
+      }
     });
 
     // ── Summary ────────────────────────────────────────────────────────────────

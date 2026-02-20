@@ -1,14 +1,15 @@
-// data.js — loads world-atlas TopoJSON from CDN, converts each country
-// feature to a normalised SVG path string, and returns a flat country array.
+// data.js — loads world-atlas TopoJSON, converts each country feature to a
+// normalised SVG path string, and returns a flat country array.
 //
-// Data sources (both versioned, static — not live APIs):
-//   • world-atlas v2  : https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json
-//   • topojson-client : https://esm.sh/topojson-client@3
+// Data sources (vendored locally — no CDN dependency at runtime):
+//   • world-atlas v2  : data/countries-50m.json  (npm:world-atlas@2)
+//   • topojson-client : vendor/topojson-client.js (npm:topojson-client@3.1.0)
 
-import { feature } from 'https://esm.sh/topojson-client@3';
+import { feature } from '../vendor/topojson-client.js';
 
-const WORLD_ATLAS_URL =
-  'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json';
+// fetch() resolves this relative to the document's base URL (not the module's location),
+// so './data/...' works correctly from both index.html and test.html at the project root.
+const WORLD_ATLAS_URL = './data/countries-50m.json';
 
 // ISO 3166-1 numeric code → { name, aliases[] }
 // Aliases are alternative names a player might type (common names,
@@ -367,7 +368,21 @@ export function featureToSvgPath(feat) {
  * @returns {Promise<Array<{id:number, name:string, aliases:string[], svgPath:string}>>}
  */
 export async function loadCountries() {
-  const response = await fetch(WORLD_ATLAS_URL);
+  const controller = new AbortController();
+  const timeoutId  = setTimeout(() => controller.abort(), 10_000);
+
+  let response;
+  try {
+    response = await fetch(WORLD_ATLAS_URL, { signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('World atlas load timed out (>10 s). Check your connection.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
   if (!response.ok) {
     throw new Error(`World atlas fetch failed (HTTP ${response.status})`);
   }

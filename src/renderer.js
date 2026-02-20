@@ -8,11 +8,19 @@ const guessInput  = document.getElementById('guess-input');
 const feedback    = document.getElementById('feedback');
 
 /**
+ * Remove all animation classes from the SVG container.
+ * Single source of truth for the class list — prevents drift between callers.
+ */
+function clearSvgAnimationClasses() {
+  svg.classList.remove('correct', 'milestone', 'completion');
+}
+
+/**
  * Swap in a new country shape.
  * Clears any active animation class so the new shape appears clean.
  */
 export function showCountry(country) {
-  svg.classList.remove('correct', 'milestone', 'completion');
+  clearSvgAnimationClasses();
   countryPath.setAttribute('d', country.svgPath);
 }
 
@@ -21,10 +29,10 @@ export function showCountry(country) {
  * Forces a reflow so the same class can be re-applied for back-to-back
  * correct answers without the animation being skipped.
  *
- * @param {'correct'|'milestone'} type
+ * @param {'correct'|'milestone'|'completion'} type
  */
 export function playAnimation(type) {
-  svg.classList.remove('correct', 'milestone');
+  clearSvgAnimationClasses();
   void svg.offsetWidth; // Force reflow — required to restart animation
   svg.classList.add(type);
 }
@@ -99,8 +107,11 @@ export function updateModeButtons(mode) {
 /**
  * Replace the entire app with a readable error message.
  * Called only when the data load fails on startup.
+ *
+ * @param {string}    message  Human-readable error description.
+ * @param {Function}  [onRetry]  Optional callback wired to a "Try Again" button.
  */
-export function showLoadError(message) {
+export function showLoadError(message, onRetry) {
   document.getElementById('app').innerHTML = `
     <div style="text-align:center; color:#f0f0f0; max-width:340px; line-height:1.6; font-family:monospace;">
       <h2 style="margin-bottom:0.75rem;">could not load game data</h2>
@@ -110,6 +121,10 @@ export function showLoadError(message) {
         (e.g. <code>python3 -m http.server 8000</code>)<br>
         and check your internet connection.
       </p>
+      ${onRetry ? '<button id="retry-btn" style="margin-top:1.5rem; background:none; border:1px solid #555; color:#f0f0f0; font-family:monospace; font-size:0.85rem; padding:0.4rem 1rem; cursor:pointer; letter-spacing:0.06em;">try again</button>' : ''}
     </div>
   `;
+  if (onRetry) {
+    document.getElementById('retry-btn').addEventListener('click', onRetry);
+  }
 }
