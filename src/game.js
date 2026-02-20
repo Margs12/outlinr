@@ -6,10 +6,10 @@ import { loadCountries }                         from './data.js';
 import { showCountry, playAnimation, updateStreak,
          setInputLocked, shakeInput, showAnswer, hideAnswer,
          showLoadError, showLoading, hideLoading,
-         updateModeButtons } from './renderer.js';
+         updateModeButtons, updateRoundProgress } from './renderer.js';
 import { playCorrect, playMilestone, playWrong, playCompletion, unlockAudio } from './audio.js';
 import { normalise, matches, shuffle }           from './utils.js';
-import { isValidMode, getCountryPool, classifyCorrectGuess } from './gameState.js';
+import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode } from './gameState.js';
 
 // ── Timing constants ──────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ const state = {
   current:     null,   // Country currently being shown
   streak:      0,      // Correct answers in a row
   animating:   false,  // Guard: blocks input during animation delay
-  mode:        'easy', // 'easy' | 'hard'
+  mode:        'easy', // 'easy' | 'medium' | 'hard' | 'expert'
 };
 
 // Cached pool for the current mode — invalidated whenever mode changes.
@@ -67,6 +67,13 @@ function advance() {
 
   state.current = state.remaining.pop();
   showCountry(state.current);
+
+  // Show round progress in expert mode (derived from remaining queue length)
+  if (state.mode === 'expert') {
+    updateRoundProgress(pool.length - state.remaining.length, pool.length);
+  } else {
+    updateRoundProgress(0, 0); // Clear when not in expert
+  }
 }
 
 /** Check whether the player's input matches the current country. */
@@ -114,8 +121,8 @@ function handleGuess(raw) {
     state.streak += 1;
     state.animating = true;
 
-    // Completion: player has correctly named every easy-mode country in a row
-    const result       = classifyCorrectGuess(state.mode, state.streak, countryPool().length);
+    // Completion: player has correctly named every country in the pool without a mistake
+    const result       = classifyCorrectGuess(state.streak, countryPool().length);
     const isCompletion = result === 'completion';
     const isMilestone  = result === 'milestone';
 
@@ -125,11 +132,11 @@ function handleGuess(raw) {
     if (isCompletion) {
       playCompletion().catch(e => console.error('[audio] playCompletion failed:', e));
       playAnimation('completion');
-      showAnswer('easy mode complete!');
+      showAnswer(`${state.mode} mode complete!`);
       setTimeout(() => {
         hideAnswer();
-        state.animating = false; // Clear before setMode so the animating guard passes
-        setMode('hard');         // Invalidates cache, reshuffles, and calls advance()
+        state.animating = false; // Clear before resetState so the animating guard in setMode passes
+        resetState(nextMode(state.mode)); // Advance to next tier (expert clamps and reshuffles)
       }, TIMINGS.COMPLETION_MS);
     } else {
       if (isMilestone) {
@@ -153,15 +160,15 @@ function handleGuess(raw) {
 
 // ── Mode switching ────────────────────────────────────────────────────────────
 
-function setMode(mode) {
-  if (!isValidMode(mode)) {
-    console.warn(`[game] setMode called with invalid mode: "${mode}"`);
-    return;
-  }
-  if (state.animating) return; // Block mode switch during active animation
-  if (mode === state.mode) return;
-  state.mode   = mode;
-  _cachedPool  = null; // Invalidate cache on mode switch
+/**
+ * Reset all game state for the given mode and start a fresh round.
+ * Called both by setMode (user clicks a button) and by the completion
+ * handler (auto-advance to next tier). Does NOT guard against animating —
+ * callers are responsible for clearing state.animating first if needed.
+ */
+function resetState(mode) {
+  state.mode      = mode;
+  _cachedPool     = null; // Invalidate pool cache
   state.streak    = 0;
   state.animating = false;
   state.remaining = shuffle(countryPool());
@@ -169,7 +176,18 @@ function setMode(mode) {
   updateStreak(0);
   updateModeButtons(mode);
   setInputLocked(false);
-  advance();
+  advance(); // advance() also updates round-progress display
+}
+
+/** Handle a user clicking a mode button. */
+function setMode(mode) {
+  if (!isValidMode(mode)) {
+    console.warn(`[game] setMode called with invalid mode: "${mode}"`);
+    return;
+  }
+  if (state.animating) return; // Block mode switch during active animation
+  if (mode === state.mode) return; // Clicking the already-active mode is a no-op
+  resetState(mode);
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────

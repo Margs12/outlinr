@@ -180,50 +180,82 @@ const COUNTRY_INFO = {
 };
 
 // ── Difficulty tiers ─────────────────────────────────────────────────────────
-// Easy = globally recognisable shapes most players will know.
-// Hard = everything else (smaller/less-known countries).
+// Each country is assigned one of four tiers based on shape recognisability,
+// with land area as a tiebreaker. Countries not listed here default to 'expert'.
+//
+//   easy   (20) — globally iconic outlines; most players will know these
+//   medium (20) — recognisable with some geography knowledge
+//   hard   (20) — requires studied knowledge; distinctive but less familiar
+//   expert (~129) — everything else: smaller, obscure, or easy to confuse
 
-const EASY_IDS = new Set([
-  32,   // Argentina
-  36,   // Australia
-  76,   // Brazil
-  124,  // Canada
-  152,  // Chile
-  156,  // China
-  192,  // Cuba
-  246,  // Finland
-  250,  // France
-  276,  // Germany
-  300,  // Greece
-  304,  // Greenland
-  356,  // India
-  360,  // Indonesia
-  364,  // Iran
-  372,  // Ireland
-  380,  // Italy
-  392,  // Japan
-  408,  // North Korea
-  450,  // Madagascar
-  458,  // Malaysia
-  484,  // Mexico
-  496,  // Mongolia
-  578,  // Norway
-  818,  // Egypt
-  604,  // Peru
-  608,  // Philippines
-  616,  // Poland
-  620,  // Portugal
-  682,  // Saudi Arabia
-  410,  // South Korea
-  710,  // South Africa
-  724,  // Spain
-  752,  // Sweden
-  764,  // Thailand
-  792,  // Turkey
-  804,  // Ukraine
-  826,  // United Kingdom
-  840,  // United States
-  704,  // Vietnam
+const TIER_MAP = new Map([
+  // ── Easy (20) ────────────────────────────────────────────────────────────────
+  [380, 'easy'],  // Italy          — the iconic boot
+  [392, 'easy'],  // Japan          — distinctive island chain
+  [36,  'easy'],  // Australia      — island continent
+  [840, 'easy'],  // United States  — contiguous 48 states
+  [643, 'easy'],  // Russia         — unmistakably massive
+  [124, 'easy'],  // Canada         — Hudson Bay notch
+  [76,  'easy'],  // Brazil         — giant of South America
+  [32,  'easy'],  // Argentina      — tapering southern shape
+  [152, 'easy'],  // Chile          — the thread
+  [356, 'easy'],  // India          — triangular peninsula
+  [156, 'easy'],  // China          — large, distinctive eastern shape
+  [826, 'easy'],  // United Kingdom — Great Britain island group
+  [578, 'easy'],  // Norway         — dramatic fjord coastline
+  [250, 'easy'],  // France         — the hexagon
+  [724, 'easy'],  // Spain          — Iberian peninsula
+  [304, 'easy'],  // Greenland      — iconic large island
+  [484, 'easy'],  // Mexico         — horn between two coastlines
+  [682, 'easy'],  // Saudi Arabia   — dominant on Arabian peninsula
+  [710, 'easy'],  // South Africa   — tip of Africa
+  [818, 'easy'],  // Egypt          — near-square + Sinai peninsula
+
+  // ── Medium (20) ──────────────────────────────────────────────────────────────
+  [276, 'medium'], // Germany
+  [752, 'medium'], // Sweden
+  [246, 'medium'], // Finland
+  [616, 'medium'], // Poland
+  [804, 'medium'], // Ukraine
+  [792, 'medium'], // Turkey
+  [364, 'medium'], // Iran
+  [398, 'medium'], // Kazakhstan
+  [496, 'medium'], // Mongolia
+  [360, 'medium'], // Indonesia
+  [608, 'medium'], // Philippines
+  [450, 'medium'], // Madagascar
+  [554, 'medium'], // New Zealand
+  [604, 'medium'], // Peru
+  [170, 'medium'], // Colombia
+  [862, 'medium'], // Venezuela
+  [192, 'medium'], // Cuba
+  [372, 'medium'], // Ireland
+  [504, 'medium'], // Morocco
+  [300, 'medium'], // Greece
+
+  // ── Hard (20) ────────────────────────────────────────────────────────────────
+  [4,   'hard'],  // Afghanistan
+  [586, 'hard'],  // Pakistan
+  [764, 'hard'],  // Thailand
+  [704, 'hard'],  // Vietnam
+  [104, 'hard'],  // Myanmar
+  [566, 'hard'],  // Nigeria
+  [231, 'hard'],  // Ethiopia
+  [834, 'hard'],  // Tanzania
+  [404, 'hard'],  // Kenya
+  [24,  'hard'],  // Angola
+  [508, 'hard'],  // Mozambique
+  [12,  'hard'],  // Algeria
+  [434, 'hard'],  // Libya
+  [466, 'hard'],  // Mali
+  [729, 'hard'],  // Sudan
+  [524, 'hard'],  // Nepal
+  [68,  'hard'],  // Bolivia
+  [218, 'hard'],  // Ecuador
+  [368, 'hard'],  // Iraq
+  [706, 'hard'],  // Somalia
+
+  // All remaining countries default to 'expert' — see tier assignment below.
 ]);
 
 // Countries where distant overseas territories make the mainland appear tiny.
@@ -411,7 +443,7 @@ export async function loadCountries() {
       name:    info.name,
       aliases: info.aliases,
       svgPath,
-      tier:    EASY_IDS.has(id) ? 'easy' : 'hard',
+      tier:    TIER_MAP.get(id) ?? 'expert',
     });
   }
 

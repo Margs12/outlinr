@@ -242,6 +242,15 @@ main {
   text-align: center;
 }
 
+/* ── Expert round progress ───────────────────────────────── */
+#round-progress {
+  font-size: 0.72rem;
+  color: #333;
+  letter-spacing: 0.06em;
+  text-align: center;
+  min-height: 1.1rem;
+}
+
 /* ── Feedback ────────────────────────────────────────────── */
 #feedback {
   min-height: 1.4rem;

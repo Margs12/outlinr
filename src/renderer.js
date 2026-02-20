@@ -97,6 +97,19 @@ export function hideLoading() {
   guessInput.focus();
 }
 
+/**
+ * Show or clear the round-progress indicator.
+ * Only displayed in expert mode; callers pass (0, 0) to clear.
+ *
+ * @param {number} seen   Countries shown in the current shuffle round (>= 1).
+ * @param {number} total  Total countries in the current pool.
+ */
+export function updateRoundProgress(seen, total) {
+  const el = document.getElementById('round-progress');
+  if (!el) return;
+  el.textContent = (seen > 0 && total > 0) ? `${seen} / ${total} this round` : '';
+}
+
 /** Sync the easy/hard toggle buttons to the active mode. */
 export function updateModeButtons(mode) {
   document.querySelectorAll('.mode-btn').forEach(btn => {

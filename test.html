@@ -22,7 +22,7 @@
   <script type="module">
     import { normalise, matches, shuffle } from './src/utils.js';
     import { featureToSvgPath, keepLargestPolygon, loadCountries } from './src/data.js';
-    import { isValidMode, getCountryPool, classifyCorrectGuess } from './src/gameState.js';
+    import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode, MODE_ORDER } from './src/gameState.js';
 
     // ── Minimal test harness ───────────────────────────────────────────────────
 
@@ -265,32 +265,58 @@
 
     suite('isValidMode()');
 
-    test('"easy" is valid', () => assert(isValidMode('easy')));
-    test('"hard" is valid', () => assert(isValidMode('hard')));
-    test('"medium" is invalid', () => assert(!isValidMode('medium')));
+    test('"easy" is valid',   () => assert(isValidMode('easy')));
+    test('"medium" is valid', () => assert(isValidMode('medium')));
+    test('"hard" is valid',   () => assert(isValidMode('hard')));
+    test('"expert" is valid', () => assert(isValidMode('expert')));
+    test('"extreme" is invalid', () => assert(!isValidMode('extreme')));
     test('undefined is invalid', () => assert(!isValidMode(undefined)));
     test('empty string is invalid', () => assert(!isValidMode('')));
     test('null is invalid', () => assert(!isValidMode(null)));
 
+    suite('nextMode()');
+
+    test('easy → medium', () => assertEqual(nextMode('easy'), 'medium'));
+    test('medium → hard',  () => assertEqual(nextMode('medium'), 'hard'));
+    test('hard → expert',  () => assertEqual(nextMode('hard'), 'expert'));
+    test('expert → expert (clamps at end)', () => assertEqual(nextMode('expert'), 'expert'));
+    test('MODE_ORDER has exactly 4 entries', () => assertEqual(MODE_ORDER.length, 4));
+    test('MODE_ORDER starts with easy and ends with expert', () => {
+      assertEqual(MODE_ORDER[0], 'easy');
+      assertEqual(MODE_ORDER[MODE_ORDER.length - 1], 'expert');
+    });
+
     suite('getCountryPool()');
 
     const sampleCountries = [
-      { name: 'France',   tier: 'easy' },
-      { name: 'Germany',  tier: 'easy' },
-      { name: 'Albania',  tier: 'hard' },
-      { name: 'Djibouti', tier: 'hard' },
+      { name: 'France',    tier: 'easy'   },
+      { name: 'Germany',   tier: 'medium' },
+      { name: 'Albania',   tier: 'hard'   },
+      { name: 'Djibouti',  tier: 'expert' },
     ];
 
     test('easy mode returns only easy-tier countries', () => {
       const pool = getCountryPool(sampleCountries, 'easy');
-      assertEqual(pool.length, 2);
+      assertEqual(pool.length, 1);
       assert(pool.every(c => c.tier === 'easy'));
+    });
+
+    test('medium mode returns only medium-tier countries', () => {
+      const pool = getCountryPool(sampleCountries, 'medium');
+      assertEqual(pool.length, 1);
+      assert(pool.every(c => c.tier === 'medium'));
     });
 
     test('hard mode returns only hard-tier countries', () => {
       const pool = getCountryPool(sampleCountries, 'hard');
-      assertEqual(pool.length, 2);
+      assertEqual(pool.length, 1);
       assert(pool.every(c => c.tier === 'hard'));
+    });
+
+    test('expert mode returns only expert-tier countries', () => {
+      const pool = getCountryPool(sampleCountries, 'expert');
+      assertEqual(pool.length, 1);
+      assert(pool.every(c => c.tier === 'expert'));
     });
 
     test('empty country list returns empty pool', () => {
@@ -305,22 +331,24 @@
 
     suite('classifyCorrectGuess()');
 
-    test('completion when easy streak equals pool size', () =>
-      assertEqual(classifyCorrectGuess('easy', 5, 5), 'completion'));
+    test('completion when streak equals pool size', () =>
+      assertEqual(classifyCorrectGuess(5, 5), 'completion'));
     test('not completion when streak is less than pool size', () =>
-      assertEqual(classifyCorrectGuess('easy', 4, 5), 'correct'));
-    test('hard mode never triggers completion even if streak equals pool size', () =>
-      assertEqual(classifyCorrectGuess('hard', 5, 5), 'milestone')); // 5 % 5 === 0
+      assertEqual(classifyCorrectGuess(4, 5), 'correct'));
+    test('completion triggers in any mode (hard: 20/20)', () =>
+      assertEqual(classifyCorrectGuess(20, 20), 'completion')); // not mode-gated
+    test('completion triggers in expert (e.g. 129/129)', () =>
+      assertEqual(classifyCorrectGuess(129, 129), 'completion'));
     test('milestone at multiples of 5', () =>
-      assertEqual(classifyCorrectGuess('easy', 5, 100), 'milestone'));
+      assertEqual(classifyCorrectGuess(5, 100), 'milestone'));
     test('milestone at 10', () =>
-      assertEqual(classifyCorrectGuess('hard', 10, 50), 'milestone'));
+      assertEqual(classifyCorrectGuess(10, 50), 'milestone'));
     test('correct for non-milestone non-completion streak', () =>
-      assertEqual(classifyCorrectGuess('easy', 3, 100), 'correct'));
+      assertEqual(classifyCorrectGuess(3, 100), 'correct'));
     test('correct at streak 1', () =>
-      assertEqual(classifyCorrectGuess('hard', 1, 50), 'correct'));
-    test('completion takes priority over milestone (e.g. pool of 5, streak 5)', () =>
-      assertEqual(classifyCorrectGuess('easy', 5, 5), 'completion')); // 5 % 5 === 0 but completion wins
+      assertEqual(classifyCorrectGuess(1, 50), 'correct'));
+    test('completion takes priority over milestone when pool size is multiple of 5', () =>
+      assertEqual(classifyCorrectGuess(5, 5), 'completion')); // 5 % 5 === 0, but completion checked first
 
     // ── loadCountries() — error paths (Issue 11) ──────────────────────────────
 
