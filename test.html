@@ -20,9 +20,14 @@
   <div id="summary"></div>
 
   <script type="module">
-    import { normalise, matches, shuffle } from './src/utils.js';
+    import { normalise, matches, shuffle, escapeHtml } from './src/utils.js';
     import { featureToSvgPath, keepLargestPolygon, loadCountries } from './src/data.js';
     import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode, MODE_ORDER } from './src/gameState.js';
+    import {
+      PLAYER_KEY, SCORES_KEY, MAX_SCORES,
+      getPlayerName, setPlayerName, addScore, getLeaderboard,
+      _loadScores, _compareScores,
+    } from './src/storage.js';
 
     // ── Minimal test harness ───────────────────────────────────────────────────
 
@@ -426,6 +431,131 @@
         globalThis.fetch = origFetch;
       }
     });
+
+    // ── escapeHtml() ──────────────────────────────────────────────────────────
+
+    suite('escapeHtml()');
+
+    test('escapes &', () => assertEqual(escapeHtml('a&b'), 'a&amp;b'));
+    test('escapes <', () => assertEqual(escapeHtml('<div>'), '&lt;div&gt;'));
+    test('escapes >', () => assertEqual(escapeHtml('a>b'), 'a&gt;b'));
+    test('escapes double quote', () => assertEqual(escapeHtml('"hi"'), '&quot;hi&quot;'));
+    test("escapes single quote", () => assertEqual(escapeHtml("it's"), "it&#39;s"));
+    test('leaves plain text unchanged', () => assertEqual(escapeHtml('hello world'), 'hello world'));
+    test('handles empty string', () => assertEqual(escapeHtml(''), ''));
+
+    // ── storage.js — localStorage mock helper ─────────────────────────────────
+    // Temporarily replace localStorage with an in-memory object for isolation.
+
+    function withMockStorage(fn) {
+      const store = {};
+      const mock = {
+        getItem:    key       => Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null,
+        setItem:    (key, val) => { store[key] = String(val); },
+        removeItem: key       => { delete store[key]; },
+      };
+      const orig = globalThis.localStorage;
+      Object.defineProperty(globalThis, 'localStorage', { value: mock, configurable: true });
+      try {
+        fn(mock, store);
+      } finally {
+        Object.defineProperty(globalThis, 'localStorage', { value: orig, configurable: true });
+      }
+    }
+
+    suite('storage — getPlayerName / setPlayerName');
+
+    test('getPlayerName() returns null when not set', () =>
+      withMockStorage(() => {
+        assertEqual(getPlayerName(), null);
+      }));
+
+    test('setPlayerName / getPlayerName round-trip', () =>
+      withMockStorage(() => {
+        setPlayerName('alice');
+        assertEqual(getPlayerName(), 'alice');
+      }));
+
+    suite('storage — addScore');
+
+    test('addScore is a no-op when streak < 1 (streak 0)', () =>
+      withMockStorage((_, store) => {
+        addScore({ name: 'bob', streak: 0, mode: 'easy' });
+        assert(!Object.prototype.hasOwnProperty.call(store, SCORES_KEY), 'expected no entry in store');
+      }));
+
+    test('addScore is a no-op when streak < 1 (streak -1)', () =>
+      withMockStorage((_, store) => {
+        addScore({ name: 'bob', streak: -1, mode: 'easy' });
+        assert(!Object.prototype.hasOwnProperty.call(store, SCORES_KEY), 'expected no entry in store');
+      }));
+
+    test('addScore stores correct shape { name, streak, mode, timestamp }', () =>
+      withMockStorage(() => {
+        const before = Date.now();
+        addScore({ name: 'alice', streak: 5, mode: 'hard' });
+        const after = Date.now();
+        const scores = _loadScores();
+        assertEqual(scores.length, 1);
+        assertEqual(scores[0].name, 'alice');
+        assertEqual(scores[0].streak, 5);
+        assertEqual(scores[0].mode, 'hard');
+        assert(scores[0].timestamp >= before && scores[0].timestamp <= after, 'timestamp out of range');
+      }));
+
+    test('addScore trims to MAX_SCORES after inserting 101 entries', () =>
+      withMockStorage(() => {
+        for (let i = 0; i < MAX_SCORES + 1; i++) {
+          addScore({ name: 'player', streak: i + 1, mode: 'easy' });
+        }
+        const scores = _loadScores();
+        assert(scores.length <= MAX_SCORES, `expected <= ${MAX_SCORES}, got ${scores.length}`);
+      }));
+
+    suite('storage — getLeaderboard / sorting');
+
+    test('getLeaderboard returns empty array when nothing stored', () =>
+      withMockStorage(() => {
+        assertEqual(getLeaderboard().length, 0);
+      }));
+
+    test('getLeaderboard sorts expert before hard before medium before easy', () =>
+      withMockStorage(() => {
+        addScore({ name: 'a', streak: 1, mode: 'easy'   });
+        addScore({ name: 'b', streak: 1, mode: 'medium' });
+        addScore({ name: 'c', streak: 1, mode: 'hard'   });
+        addScore({ name: 'd', streak: 1, mode: 'expert' });
+        const lb = getLeaderboard();
+        assertEqual(lb[0].mode, 'expert');
+        assertEqual(lb[1].mode, 'hard');
+        assertEqual(lb[2].mode, 'medium');
+        assertEqual(lb[3].mode, 'easy');
+      }));
+
+    test('getLeaderboard sorts by streak within the same mode', () =>
+      withMockStorage(() => {
+        addScore({ name: 'a', streak: 3, mode: 'hard' });
+        addScore({ name: 'b', streak: 7, mode: 'hard' });
+        addScore({ name: 'c', streak: 1, mode: 'hard' });
+        const lb = getLeaderboard();
+        assertEqual(lb[0].streak, 7);
+        assertEqual(lb[1].streak, 3);
+        assertEqual(lb[2].streak, 1);
+      }));
+
+    suite('storage — _loadScores corrupt data');
+
+    test('_loadScores returns [] on corrupt JSON', () =>
+      withMockStorage((_, store) => {
+        store[SCORES_KEY] = '{ not valid json [[[';
+        assertEqual(_loadScores().length, 0);
+      }));
+
+    test('_loadScores returns [] when stored value is non-array JSON', () =>
+      withMockStorage((_, store) => {
+        store[SCORES_KEY] = JSON.stringify({ oops: true });
+        assertEqual(_loadScores().length, 0);
+      }));
 
     // ── Summary ────────────────────────────────────────────────────────────────
 

@@ -22,6 +22,7 @@
       <div id="streak-display">
         streak <span id="streak-count">0</span>
       </div>
+      <button id="scores-btn">scores</button>
     </header>
 
     <main>
@@ -54,6 +55,30 @@
       <p id="round-progress" aria-live="polite"></p>
       <div id="feedback" aria-live="polite"></div>
     </main>
+  </div>
+
+  <!-- Name-entry overlay — shown on first visit when no player name is stored -->
+  <div id="name-overlay" class="overlay" hidden>
+    <div class="overlay-card">
+      <p>what's your name?</p>
+      <div class="overlay-input-row">
+        <span>&gt;</span>
+        <input id="name-input" type="text" placeholder="enter name..." maxlength="20" autocomplete="off" />
+      </div>
+      <button id="name-submit">play</button>
+    </div>
+  </div>
+
+  <!-- Leaderboard overlay -->
+  <div id="leaderboard-overlay" class="overlay" hidden>
+    <div class="overlay-card">
+      <div class="overlay-header">
+        <span>leaderboard</span>
+        <button id="leaderboard-close">close</button>
+      </div>
+      <ol id="leaderboard-list"></ol>
+      <p id="leaderboard-empty" hidden>no scores yet</p>
+    </div>
   </div>
 
   <script type="module" src="src/game.js"></script>

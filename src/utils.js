@@ -34,6 +34,22 @@ export function matches(input, country) {
   return country.aliases.some(alias => normalise(alias) === norm);
 }
 
+/**
+ * Escape a string for safe injection into innerHTML.
+ * Covers the five characters that can introduce XSS in HTML contexts.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+export function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /** Fisher-Yates shuffle. Returns a new array, never mutates the input. */
 export function shuffle(arr) {
   const a = [...arr];

@@ -1,11 +1,19 @@
 // renderer.js — all DOM mutations live here.
 // game.js decides WHAT to do; renderer.js decides HOW to show it.
 
-const svg         = document.getElementById('shape-svg');
-const countryPath = document.getElementById('country-path');
-const streakCount = document.getElementById('streak-count');
-const guessInput  = document.getElementById('guess-input');
-const feedback    = document.getElementById('feedback');
+import { escapeHtml } from './utils.js';
+
+const svg               = document.getElementById('shape-svg');
+const countryPath       = document.getElementById('country-path');
+const streakCount       = document.getElementById('streak-count');
+const guessInput        = document.getElementById('guess-input');
+const feedback          = document.getElementById('feedback');
+const nameOverlay       = document.getElementById('name-overlay');
+const nameInput         = document.getElementById('name-input');
+const nameSubmit        = document.getElementById('name-submit');
+const leaderboardOverlay = document.getElementById('leaderboard-overlay');
+const leaderboardList   = document.getElementById('leaderboard-list');
+const leaderboardEmpty  = document.getElementById('leaderboard-empty');
 
 /**
  * Remove all animation classes from the SVG container.
@@ -115,6 +123,90 @@ export function updateModeButtons(mode) {
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mode === mode);
   });
+}
+
+// ── Overlay helpers ───────────────────────────────────────────────────────────
+
+/**
+ * Show the name-entry overlay and call onSubmit(name) when the player
+ * submits a name (Enter key or button click). Trims whitespace; re-focuses
+ * input if submitted value is empty. Removes its own listeners on submit.
+ *
+ * @param {function(string): void} onSubmit
+ */
+export function showNameEntry(onSubmit) {
+  nameInput.value = '';
+  nameOverlay.hidden = false;
+  nameInput.focus();
+
+  function submit() {
+    const name = nameInput.value.trim();
+    if (!name) {
+      nameInput.focus();
+      return;
+    }
+    hideNameEntry();
+    onSubmit(name);
+  }
+
+  function onKeydown(e) {
+    if (e.key === 'Enter') submit();
+  }
+
+  nameInput.addEventListener('keydown', onKeydown);
+  nameSubmit.addEventListener('click', submit);
+
+  // Store cleanup refs so hideNameEntry can remove them
+  nameOverlay._cleanupKeydown = onKeydown;
+  nameOverlay._cleanupClick   = submit;
+}
+
+/** Hide the name-entry overlay and clean up its event listeners. */
+export function hideNameEntry() {
+  nameOverlay.hidden = true;
+  if (nameOverlay._cleanupKeydown) {
+    nameInput.removeEventListener('keydown', nameOverlay._cleanupKeydown);
+    delete nameOverlay._cleanupKeydown;
+  }
+  if (nameOverlay._cleanupClick) {
+    nameSubmit.removeEventListener('click', nameOverlay._cleanupClick);
+    delete nameOverlay._cleanupClick;
+  }
+}
+
+/**
+ * Render top-20 scores and show the leaderboard overlay.
+ * Highlights the current player's entries with the `.self` class.
+ *
+ * @param {{ name: string, mode: string, streak: number }[]} scores
+ * @param {string|null} playerName
+ */
+export function showLeaderboard(scores, playerName) {
+  const top = scores.slice(0, 20);
+  leaderboardList.innerHTML = '';
+
+  if (top.length === 0) {
+    leaderboardEmpty.hidden = false;
+  } else {
+    leaderboardEmpty.hidden = true;
+    top.forEach((s, i) => {
+      const isSelf = playerName !== null && s.name === playerName;
+      const li = document.createElement('li');
+      li.className = 'leaderboard-row' + (isSelf ? ' self' : '');
+      li.innerHTML =
+        `<span class="lb-rank">${i + 1}</span>` +
+        `<span class="lb-name">${escapeHtml(s.name)}</span>` +
+        `<span class="lb-score">${escapeHtml(s.mode)} ${s.streak}</span>`;
+      leaderboardList.appendChild(li);
+    });
+  }
+
+  leaderboardOverlay.hidden = false;
+}
+
+/** Hide the leaderboard overlay. */
+export function hideLeaderboard() {
+  leaderboardOverlay.hidden = true;
 }
 
 /**

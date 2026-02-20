@@ -6,10 +6,12 @@ import { loadCountries }                         from './data.js';
 import { showCountry, playAnimation, updateStreak,
          setInputLocked, shakeInput, showAnswer, hideAnswer,
          showLoadError, showLoading, hideLoading,
-         updateModeButtons, updateRoundProgress } from './renderer.js';
+         updateModeButtons, updateRoundProgress,
+         showNameEntry, showLeaderboard, hideLeaderboard } from './renderer.js';
 import { playCorrect, playMilestone, playWrong, playCompletion, unlockAudio } from './audio.js';
 import { normalise, matches, shuffle }           from './utils.js';
 import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode } from './gameState.js';
+import { getPlayerName, setPlayerName, addScore, getLeaderboard } from './storage.js';
 
 // ── Timing constants ──────────────────────────────────────────────────────────
 
@@ -90,6 +92,7 @@ function isCorrect(input) {
  */
 function handleStreakReset(doShake) {
   state.streak    = 0;
+  state.remaining = []; // Force reshuffle so the round counter resets on next advance()
   state.animating = true;
 
   updateStreak(0);
@@ -154,6 +157,9 @@ function handleGuess(raw) {
     }
 
   } else {
+    if (state.streak > 0) {
+      addScore({ name: getPlayerName() ?? 'anonymous', streak: state.streak, mode: state.mode });
+    }
     handleStreakReset(true); // Wrong answer — shake
   }
 }
@@ -213,12 +219,32 @@ async function init() {
     });
   });
 
+  // Wire scores button
+  document.getElementById('scores-btn').addEventListener('click', () => {
+    showLeaderboard(getLeaderboard(), getPlayerName());
+  });
+
+  // Wire leaderboard close button
+  document.getElementById('leaderboard-close').addEventListener('click', () => {
+    hideLeaderboard();
+  });
+
   showLoading();
   try {
     state.countries = await loadCountries();
     hideLoading();
     state.remaining = shuffle(countryPool());
     advance();
+
+    // Show name entry on first visit (no stored player name)
+    if (!getPlayerName()) {
+      setInputLocked(true);
+      showNameEntry(name => {
+        setPlayerName(name);
+        setInputLocked(false);
+        document.getElementById('guess-input').focus();
+      });
+    }
   } catch (err) {
     showLoadError(err.message, init);
   }
