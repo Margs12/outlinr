@@ -123,8 +123,10 @@ function handleGuess(raw) {
     const result = classifyCorrectGuess(state.streak, countryPool().length);
 
     // Completion: all expert countries guessed without a single miss.
-    // Detected when the expert shuffle queue is empty after a correct answer.
-    const isCompletion = getActiveTier('endless', state.streak) === 'expert'
+    // Use state.endlessTier (set by advance()) rather than getActiveTier() so the
+    // check reflects which queue was actually exhausted, not just the new streak tier.
+    // This prevents a false-positive when the hard queue runs dry at streak 61.
+    const isCompletion = state.endlessTier === 'expert'
       && state.remaining.length === 0;
 
     const isMilestone = result === 'milestone' && !isCompletion;
