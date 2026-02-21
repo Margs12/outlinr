@@ -48,6 +48,17 @@ header {
   width: 100%;
 }
 
+#back-link {
+  font-size: 0.9rem;
+  color: #555;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+#back-link:hover {
+  color: #f0f0f0;
+}
+
 h1 {
   font-size: 1.2rem;
   font-weight: 700;
