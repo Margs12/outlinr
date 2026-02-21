@@ -36,7 +36,7 @@ export function addScore({ name, streak, mode }) {
  * @returns {{ name: string, streak: number, mode: string, timestamp: number }[]}
  */
 export function getLeaderboard() {
-  return _loadScores().sort(_compareScores);
+  return _loadScores().filter(s => s.mode === 'endless').sort(_compareScores);
 }
 
 /** @returns {object[]} — [] on missing or corrupt data */
