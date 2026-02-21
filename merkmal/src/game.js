@@ -12,6 +12,8 @@ import { getHighScore, updateHighScore }                     from './storage.js'
 
 // ── Timing constants ──────────────────────────────────────────────────────────
 
+const UMLAUT_KEYS = { '1': 'ä', '2': 'ö', '3': 'ü', '4': 'ß' };
+
 const TIMINGS = {
   CORRECT_MS:      550,
   MILESTONE_MS:    900,
@@ -154,6 +156,10 @@ async function init() {
       const value = input.value;
       input.value = '';
       handleGuess(value);
+    } else if (UMLAUT_KEYS[e.key]) {
+      e.preventDefault();
+      const char = UMLAUT_KEYS[e.key];
+      input.setRangeText(char, input.selectionStart, input.selectionEnd, 'end');
     }
   });
 
