@@ -3,55 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>outlinr</title>
+  <title>play</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0c0c0c;
+      color: #f0f0f0;
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    nav {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+    }
+
+    a.game {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      padding: 3rem 4rem;
+      text-decoration: none;
+      color: #f0f0f0;
+      border: 1px solid #1e1e1e;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    a.game:hover {
+      border-color: #444;
+      background: #111;
+    }
+
+    a.game h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    a.game p {
+      font-size: 0.75rem;
+      color: #444;
+      letter-spacing: 0.06em;
+    }
+
+    a.game:hover p {
+      color: #666;
+    }
+
+    .divider {
+      width: 1px;
+      background: #1e1e1e;
+      align-self: stretch;
+    }
+  </style>
 </head>
 <body>
-  <div id="app">
-    <header>
-      <h1>outlinr</h1>
-<div id="streak-display">
-        streak <span id="streak-count">0</span>
-      </div>
-      <div id="high-score-display">
-        best <span id="high-score-count">0</span>
-      </div>
-    </header>
-
-    <main>
-      <div id="shape-container">
-        <svg
-          id="shape-svg"
-          viewBox="0 0 200 200"
-          xmlns="http://www.w3.org/2000/svg"
-          aria-label="Country shape to identify"
-        >
-          <path id="country-path" d="" fill-rule="evenodd" />
-        </svg>
-      </div>
-
-      <div id="input-area">
-        <span id="prompt">&gt;</span>
-        <input
-          type="text"
-          id="guess-input"
-          placeholder="country name..."
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="off"
-          spellcheck="false"
-          autofocus
-        />
-      </div>
-
-      <p id="skip-hint">press enter to skip</p>
-      <div id="feedback" aria-live="polite"></div>
-    </main>
-  </div>
-
-  <script type="module" src="src/game.js"></script>
+  <nav>
+    <a class="game" href="outlinr.html">
+      <h2>outlinr</h2>
+      <p>country shapes</p>
+    </a>
+    <div class="divider"></div>
+    <a class="game" href="merkmal/">
+      <h2>merkmal</h2>
+      <p>german nouns</p>
+    </a>
+  </nav>
 </body>
 </html>
