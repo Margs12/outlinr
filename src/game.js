@@ -10,7 +10,7 @@ import { showCountry, playAnimation, updateStreak, updateTier,
          showNameEntry, showLeaderboard, hideLeaderboard } from './renderer.js';
 import { playCorrect, playMilestone, playWrong, playCompletion, unlockAudio } from './audio.js';
 import { normalise, matches, shuffle }           from './utils.js';
-import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode, drawEndlessCountry, getActiveTier } from './gameState.js';
+import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode, getActiveTier } from './gameState.js';
 import { getPlayerName, setPlayerName, addScore, getLeaderboard } from './storage.js';
 
 // ── Timing constants ──────────────────────────────────────────────────────────
@@ -25,12 +25,13 @@ const TIMINGS = {
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const state = {
-  countries:   [],     // Full country list (loaded once, all tiers)
-  remaining:   [],     // Shuffle queue — refilled when empty
-  current:     null,   // Country currently being shown
-  streak:      0,      // Correct answers in a row
-  animating:   false,  // Guard: blocks input during animation delay
-  mode:        'endless', // 'easy' | 'medium' | 'hard' | 'endless'
+  countries:    [],       // Full country list (loaded once, all tiers)
+  remaining:    [],       // Shuffle queue — refilled when empty
+  current:      null,     // Country currently being shown
+  streak:       0,        // Correct answers in a row
+  animating:    false,    // Guard: blocks input during animation delay
+  mode:         'endless', // 'easy' | 'medium' | 'hard' | 'endless'
+  endlessTier:  null,     // Active tier in endless mode — detects tier transitions
 };
 
 // Cached pool for the current mode — invalidated whenever mode changes.
@@ -57,9 +58,24 @@ function advance() {
     return;
   }
 
-  // Endless mode: weighted random draw on each turn, no shuffle queue
+  // Endless mode: shuffle queue per tier, reset when tier changes
   if (state.mode === 'endless') {
-    state.current = drawEndlessCountry(state.countries, state.streak, state.current);
+    const tier = getActiveTier('endless', state.streak);
+    const tierChanged = tier !== state.endlessTier;
+
+    if (state.remaining.length === 0 || tierChanged) {
+      state.endlessTier = tier;
+      const tierPool = state.countries.filter(c => c.tier === tier);
+      const fresh = shuffle(tierPool);
+      // Avoid immediate repeat only on same-tier queue refill (not on tier change)
+      if (!tierChanged && state.current && fresh[fresh.length - 1].id === state.current.id) {
+        const swapIdx = Math.floor(Math.random() * (fresh.length - 1));
+        [fresh[swapIdx], fresh[fresh.length - 1]] = [fresh[fresh.length - 1], fresh[swapIdx]];
+      }
+      state.remaining = fresh;
+    }
+
+    state.current = state.remaining.pop();
     showCountry(state.current);
     updateRoundProgress(0, 0);
     return;
@@ -178,11 +194,12 @@ function handleGuess(raw) {
  * callers are responsible for clearing state.animating first if needed.
  */
 function resetState(mode) {
-  state.mode      = mode;
-  _cachedPool     = null; // Invalidate pool cache
-  state.streak    = 0;
-  state.animating = false;
-  state.remaining = mode === 'endless' ? [] : shuffle(countryPool());
+  state.mode        = mode;
+  _cachedPool       = null; // Invalidate pool cache
+  state.streak      = 0;
+  state.animating   = false;
+  state.endlessTier = null; // Force tier queue rebuild on next advance()
+  state.remaining   = mode === 'endless' ? [] : shuffle(countryPool());
   state.current   = null;
   updateStreak(0);
   updateTier(getActiveTier(mode, 0));
