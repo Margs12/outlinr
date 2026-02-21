@@ -4,6 +4,28 @@
   padding: 0;
 }
 
+/* ── Tier vignette (GPU-composited opacity transition) ───── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(150, 15, 15, 0.65) 100%);
+  opacity: 0;
+  transition: opacity 3s ease;
+}
+
+/* Fast fade-out when streak resets to easy */
+body[data-tier="easy"]::before {
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+
+body[data-tier="medium"]::before { opacity: 0.30; }
+body[data-tier="hard"]::before   { opacity: 0.60; }
+body[data-tier="expert"]::before { opacity: 1; }
+
 body {
   background: #0c0c0c;
   color: #f0f0f0;
@@ -49,7 +71,12 @@ h1 {
   font-weight: 700;
   color: #f0f0f0;
   margin-left: 0.25rem;
+  transition: color 0.5s ease;
 }
+
+body[data-tier="medium"] #streak-count { color: #d4a94e; }
+body[data-tier="hard"]   #streak-count { color: #c87830; }
+body[data-tier="expert"] #streak-count { color: #c84040; }
 
 /* ── Mode toggle ─────────────────────────────────────────── */
 #mode-toggle {

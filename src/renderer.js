@@ -51,6 +51,16 @@ export function updateStreak(n) {
 }
 
 /**
+ * Set the visual tension tier on <body>.
+ * CSS uses the data-tier attribute to drive the vignette and streak counter colour.
+ *
+ * @param {'easy' | 'medium' | 'hard' | 'expert'} tier
+ */
+export function updateTier(tier) {
+  document.body.dataset.tier = tier;
+}
+
+/**
  * Lock the input while an animation is playing so rapid keypresses
  * cannot queue up multiple guesses.
  */

@@ -23,7 +23,8 @@
     import { normalise, matches, shuffle, escapeHtml } from './src/utils.js';
     import { featureToSvgPath, keepLargestPolygon, loadCountries } from './src/data.js';
     import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode, MODE_ORDER,
-             getEndlessWeights, drawEndlessCountry } from './src/gameState.js';
+             getEndlessWeights, drawEndlessCountry,
+             getActiveTier, ENDLESS_TIER_CUTOFFS } from './src/gameState.js';
     import {
       PLAYER_KEY, SCORES_KEY, MAX_SCORES,
       getPlayerName, setPlayerName, addScore, getLeaderboard,
@@ -499,6 +500,62 @@
         const result = withMockRandom(rand, () => drawEndlessCountry(endlessPool, 65, null));
         assertEqual(result.tier, 'expert', `expected expert at streak 65 with rand=${rand}`);
       }
+    });
+
+    // ── getActiveTier() ────────────────────────────────────────────────────────
+
+    suite('getActiveTier() — non-endless modes always neutral');
+
+    test('easy mode → always easy regardless of streak', () => {
+      assertEqual(getActiveTier('easy', 0),   'easy');
+      assertEqual(getActiveTier('easy', 999), 'easy');
+    });
+
+    test('medium mode → always easy (neutral outside endless)', () => {
+      assertEqual(getActiveTier('medium', 0),   'easy');
+      assertEqual(getActiveTier('medium', 999), 'easy');
+    });
+
+    test('hard mode → always easy (neutral outside endless)', () => {
+      assertEqual(getActiveTier('hard', 0),   'easy');
+      assertEqual(getActiveTier('hard', 999), 'easy');
+    });
+
+    suite('getActiveTier() — endless mode tier boundaries');
+
+    test('streak 0 → easy', ()  => assertEqual(getActiveTier('endless', 0),  'easy'));
+    test('streak 20 → easy (boundary)', () => assertEqual(getActiveTier('endless', 20), 'easy'));
+    test('streak 21 → medium',          () => assertEqual(getActiveTier('endless', 21), 'medium'));
+    test('streak 40 → medium (boundary)', () => assertEqual(getActiveTier('endless', 40), 'medium'));
+    test('streak 41 → hard',            () => assertEqual(getActiveTier('endless', 41), 'hard'));
+    test('streak 60 → hard (boundary)', () => assertEqual(getActiveTier('endless', 60), 'hard'));
+    test('streak 61 → expert',          () => assertEqual(getActiveTier('endless', 61), 'expert'));
+    test('streak 999 → expert',         () => assertEqual(getActiveTier('endless', 999), 'expert'));
+
+    suite('ENDLESS_TIER_CUTOFFS — consistency with getEndlessWeights');
+
+    test('at easy cutoff, weight brackets still give 100% easy', () => {
+      assertEqual(getEndlessWeights(ENDLESS_TIER_CUTOFFS.easy).easy, 1);
+    });
+
+    test('at easy cutoff + 1, weight brackets give 100% medium', () => {
+      assertEqual(getEndlessWeights(ENDLESS_TIER_CUTOFFS.easy + 1).medium, 1);
+    });
+
+    test('at medium cutoff, weight brackets still give 100% medium', () => {
+      assertEqual(getEndlessWeights(ENDLESS_TIER_CUTOFFS.medium).medium, 1);
+    });
+
+    test('at medium cutoff + 1, weight brackets give 100% hard', () => {
+      assertEqual(getEndlessWeights(ENDLESS_TIER_CUTOFFS.medium + 1).hard, 1);
+    });
+
+    test('at hard cutoff, weight brackets still give 100% hard', () => {
+      assertEqual(getEndlessWeights(ENDLESS_TIER_CUTOFFS.hard).hard, 1);
+    });
+
+    test('at hard cutoff + 1, weight brackets give 100% expert', () => {
+      assertEqual(getEndlessWeights(ENDLESS_TIER_CUTOFFS.hard + 1).expert, 1);
     });
 
     // ── loadCountries() — error paths (Issue 11) ──────────────────────────────

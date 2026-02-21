@@ -56,11 +56,17 @@ export function classifyCorrectGuess(newStreak, poolSize) {
  *
  * Brackets: [maxStreak (inclusive), { tier: weight }]
  */
+/**
+ * Streak boundaries where each difficulty tier begins in endless mode.
+ * Exported so getActiveTier() and the weight brackets share one source of truth.
+ */
+export const ENDLESS_TIER_CUTOFFS = { easy: 20, medium: 40, hard: 60 };
+
 const ENDLESS_WEIGHT_BRACKETS = [
-  [20,       { easy: 1.00, medium: 0.00, hard: 0.00, expert: 0.00 }],
-  [40,       { easy: 0.00, medium: 1.00, hard: 0.00, expert: 0.00 }],
-  [60,       { easy: 0.00, medium: 0.00, hard: 1.00, expert: 0.00 }],
-  [Infinity, { easy: 0.00, medium: 0.00, hard: 0.00, expert: 1.00 }],
+  [ENDLESS_TIER_CUTOFFS.easy,   { easy: 1.00, medium: 0.00, hard: 0.00, expert: 0.00 }],
+  [ENDLESS_TIER_CUTOFFS.medium, { easy: 0.00, medium: 1.00, hard: 0.00, expert: 0.00 }],
+  [ENDLESS_TIER_CUTOFFS.hard,   { easy: 0.00, medium: 0.00, hard: 1.00, expert: 0.00 }],
+  [Infinity,                    { easy: 0.00, medium: 0.00, hard: 0.00, expert: 1.00 }],
 ];
 
 const ENDLESS_TIERS = ['easy', 'medium', 'hard', 'expert'];
@@ -129,4 +135,23 @@ export function drawEndlessCountry(countries, streak, exclude) {
       return pool[Math.floor(Math.random() * pool.length)];
     }
   }
+}
+
+/**
+ * Return the visual tier for the current game state.
+ * Used to drive the data-tier attribute on <body> for CSS tension effects.
+ *
+ * Non-endless modes always return 'easy' (neutral styling).
+ * In endless mode, tier is derived from the current streak.
+ *
+ * @param {string} mode    Current game mode.
+ * @param {number} streak  Current streak count.
+ * @returns {'easy' | 'medium' | 'hard' | 'expert'}
+ */
+export function getActiveTier(mode, streak) {
+  if (mode !== 'endless') return 'easy';
+  if (streak <= ENDLESS_TIER_CUTOFFS.easy)   return 'easy';
+  if (streak <= ENDLESS_TIER_CUTOFFS.medium) return 'medium';
+  if (streak <= ENDLESS_TIER_CUTOFFS.hard)   return 'hard';
+  return 'expert';
 }

@@ -3,14 +3,14 @@
 // those modules imports from here, keeping dependencies one-directional.
 
 import { loadCountries }                         from './data.js';
-import { showCountry, playAnimation, updateStreak,
+import { showCountry, playAnimation, updateStreak, updateTier,
          setInputLocked, shakeInput, showAnswer, hideAnswer,
          showLoadError, showLoading, hideLoading,
          updateModeButtons, updateRoundProgress,
          showNameEntry, showLeaderboard, hideLeaderboard } from './renderer.js';
 import { playCorrect, playMilestone, playWrong, playCompletion, unlockAudio } from './audio.js';
 import { normalise, matches, shuffle }           from './utils.js';
-import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode, drawEndlessCountry } from './gameState.js';
+import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode, drawEndlessCountry, getActiveTier } from './gameState.js';
 import { getPlayerName, setPlayerName, addScore, getLeaderboard } from './storage.js';
 
 // ── Timing constants ──────────────────────────────────────────────────────────
@@ -99,6 +99,7 @@ function handleStreakReset(doShake) {
   state.animating = true;
 
   updateStreak(0);
+  updateTier(getActiveTier(state.mode, state.streak));
   playWrong().catch(e => console.error('[audio] playWrong failed:', e));
   setInputLocked(true);
   if (doShake) shakeInput();
@@ -134,6 +135,7 @@ function handleGuess(raw) {
 
     setInputLocked(true);
     updateStreak(state.streak);
+    updateTier(getActiveTier(state.mode, state.streak));
 
     if (isCompletion) {
       playCompletion().catch(e => console.error('[audio] playCompletion failed:', e));
@@ -183,6 +185,7 @@ function resetState(mode) {
   state.remaining = mode === 'endless' ? [] : shuffle(countryPool());
   state.current   = null;
   updateStreak(0);
+  updateTier(getActiveTier(mode, 0));
   updateModeButtons(mode);
   setInputLocked(false);
   advance(); // advance() also updates round-progress display
