@@ -271,25 +271,19 @@
 
     suite('isValidMode()');
 
-    test('"practice" is valid',  () => assert(isValidMode('practice')));
-    test('"endless" is valid',   () => assert(isValidMode('endless')));
-    test('"easy" is no longer a valid mode',   () => assert(!isValidMode('easy')));
-    test('"medium" is no longer a valid mode', () => assert(!isValidMode('medium')));
-    test('"hard" is no longer a valid mode',   () => assert(!isValidMode('hard')));
-    test('"extreme" is invalid', () => assert(!isValidMode('extreme')));
-    test('undefined is invalid', () => assert(!isValidMode(undefined)));
+    test('"endless" is valid',  () => assert(isValidMode('endless')));
+    test('"practice" is not a valid mode', () => assert(!isValidMode('practice')));
+    test('"easy" is not a valid mode',     () => assert(!isValidMode('easy')));
+    test('"extreme" is invalid',  () => assert(!isValidMode('extreme')));
+    test('undefined is invalid',  () => assert(!isValidMode(undefined)));
     test('empty string is invalid', () => assert(!isValidMode('')));
-    test('null is invalid', () => assert(!isValidMode(null)));
+    test('null is invalid',       () => assert(!isValidMode(null)));
 
     suite('nextMode()');
 
-    test('practice → endless', () => assertEqual(nextMode('practice'), 'endless'));
     test('endless → endless (clamps at end)', () => assertEqual(nextMode('endless'), 'endless'));
-    test('MODE_ORDER has exactly 2 entries', () => assertEqual(MODE_ORDER.length, 2));
-    test('MODE_ORDER starts with practice and ends with endless', () => {
-      assertEqual(MODE_ORDER[0], 'practice');
-      assertEqual(MODE_ORDER[MODE_ORDER.length - 1], 'endless');
-    });
+    test('MODE_ORDER has exactly 1 entry',    () => assertEqual(MODE_ORDER.length, 1));
+    test('MODE_ORDER sole entry is endless',  () => assertEqual(MODE_ORDER[0], 'endless'));
 
     suite('getCountryPool()');
 
@@ -300,12 +294,7 @@
       { name: 'Djibouti',  tier: 'expert' },
     ];
 
-    test('practice mode returns all countries', () => {
-      const pool = getCountryPool(sampleCountries, 'practice');
-      assertEqual(pool.length, sampleCountries.length);
-    });
-
-    test('endless mode returns all countries', () => {
+    test('returns all countries', () => {
       const pool = getCountryPool(sampleCountries, 'endless');
       assertEqual(pool.length, sampleCountries.length);
     });
@@ -491,9 +480,9 @@
 
     suite('getActiveTier() — non-endless modes always neutral');
 
-    test('practice mode → always easy regardless of streak', () => {
-      assertEqual(getActiveTier('practice', 0),   'easy');
-      assertEqual(getActiveTier('practice', 999), 'easy');
+    test('any non-endless mode → always easy regardless of streak', () => {
+      assertEqual(getActiveTier('other', 0),   'easy');
+      assertEqual(getActiveTier('other', 999), 'easy');
     });
 
     suite('getActiveTier() — endless mode tier boundaries');

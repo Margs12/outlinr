@@ -124,13 +124,6 @@ export function hideLoading() {
   guessInput.focus();
 }
 
-/** Sync the mode toggle button to the active mode. */
-export function updateModeButtons(mode) {
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.mode === mode);
-  });
-}
-
 /**
  * Replace the entire app with a readable error message.
  * Called only when the data load fails on startup.

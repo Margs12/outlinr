@@ -2,7 +2,7 @@
 // Extracted from game.js so they can be imported and tested independently
 // without triggering any DOM access or module-level side effects.
 
-export const MODE_ORDER = ['practice', 'endless'];
+export const MODE_ORDER = ['endless'];
 
 /** Returns true if mode is a valid game mode string. */
 export function isValidMode(mode) {

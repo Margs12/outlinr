@@ -80,33 +80,6 @@ body[data-tier="medium"] #streak-count { color: #d4a94e; }
 body[data-tier="hard"]   #streak-count { color: #c87830; }
 body[data-tier="expert"] #streak-count { color: #c84040; }
 
-/* ── Mode toggle ─────────────────────────────────────────── */
-#mode-toggle {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.mode-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-family: inherit;
-  letter-spacing: 0.06em;
-  color: #333;
-  padding: 0.2rem 0.4rem;
-  transition: color 0.15s;
-}
-
-.mode-btn:hover {
-  color: #888;
-}
-
-.mode-btn.active {
-  color: #f0f0f0;
-  font-weight: 700;
-}
-
 main {
   display: flex;
   flex-direction: column;
