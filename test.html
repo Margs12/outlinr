@@ -26,9 +26,8 @@
              getEndlessWeights, drawEndlessCountry,
              getActiveTier, ENDLESS_TIER_CUTOFFS } from './src/gameState.js';
     import {
-      PLAYER_KEY, SCORES_KEY, MAX_SCORES,
-      getPlayerName, setPlayerName, addScore, getLeaderboard,
-      _loadScores, _compareScores,
+      HIGH_SCORE_KEY,
+      getHighScore, updateHighScore,
     } from './src/storage.js';
 
     // ── Minimal test harness ───────────────────────────────────────────────────
@@ -272,10 +271,11 @@
 
     suite('isValidMode()');
 
-    test('"easy" is valid',   () => assert(isValidMode('easy')));
-    test('"medium" is valid', () => assert(isValidMode('medium')));
-    test('"hard" is valid',   () => assert(isValidMode('hard')));
-    test('"endless" is valid', () => assert(isValidMode('endless')));
+    test('"practice" is valid',  () => assert(isValidMode('practice')));
+    test('"endless" is valid',   () => assert(isValidMode('endless')));
+    test('"easy" is no longer a valid mode',   () => assert(!isValidMode('easy')));
+    test('"medium" is no longer a valid mode', () => assert(!isValidMode('medium')));
+    test('"hard" is no longer a valid mode',   () => assert(!isValidMode('hard')));
     test('"extreme" is invalid', () => assert(!isValidMode('extreme')));
     test('undefined is invalid', () => assert(!isValidMode(undefined)));
     test('empty string is invalid', () => assert(!isValidMode('')));
@@ -283,13 +283,11 @@
 
     suite('nextMode()');
 
-    test('easy → medium', () => assertEqual(nextMode('easy'), 'medium'));
-    test('medium → hard',  () => assertEqual(nextMode('medium'), 'hard'));
-    test('hard → endless',  () => assertEqual(nextMode('hard'), 'endless'));
+    test('practice → endless', () => assertEqual(nextMode('practice'), 'endless'));
     test('endless → endless (clamps at end)', () => assertEqual(nextMode('endless'), 'endless'));
-    test('MODE_ORDER has exactly 4 entries', () => assertEqual(MODE_ORDER.length, 4));
-    test('MODE_ORDER starts with easy and ends with endless', () => {
-      assertEqual(MODE_ORDER[0], 'easy');
+    test('MODE_ORDER has exactly 2 entries', () => assertEqual(MODE_ORDER.length, 2));
+    test('MODE_ORDER starts with practice and ends with endless', () => {
+      assertEqual(MODE_ORDER[0], 'practice');
       assertEqual(MODE_ORDER[MODE_ORDER.length - 1], 'endless');
     });
 
@@ -302,42 +300,29 @@
       { name: 'Djibouti',  tier: 'expert' },
     ];
 
-    test('easy mode returns only easy-tier countries', () => {
-      const pool = getCountryPool(sampleCountries, 'easy');
-      assertEqual(pool.length, 1);
-      assert(pool.every(c => c.tier === 'easy'));
+    test('practice mode returns all countries', () => {
+      const pool = getCountryPool(sampleCountries, 'practice');
+      assertEqual(pool.length, sampleCountries.length);
     });
 
-    test('medium mode returns only medium-tier countries', () => {
-      const pool = getCountryPool(sampleCountries, 'medium');
-      assertEqual(pool.length, 1);
-      assert(pool.every(c => c.tier === 'medium'));
-    });
-
-    test('hard mode returns only hard-tier countries', () => {
-      const pool = getCountryPool(sampleCountries, 'hard');
-      assertEqual(pool.length, 1);
-      assert(pool.every(c => c.tier === 'hard'));
-    });
-
-    test('endless mode returns all countries regardless of tier', () => {
+    test('endless mode returns all countries', () => {
       const pool = getCountryPool(sampleCountries, 'endless');
       assertEqual(pool.length, sampleCountries.length);
     });
 
-    test('endless mode result is a copy, not a reference to the input', () => {
+    test('result is a copy, not a reference to the input', () => {
       const pool = getCountryPool(sampleCountries, 'endless');
       pool.push({ name: 'Ghost', tier: 'easy' });
       assertEqual(sampleCountries.length, 4, 'input array should not be mutated');
     });
 
     test('empty country list returns empty pool', () => {
-      assertEqual(getCountryPool([], 'easy').length, 0);
+      assertEqual(getCountryPool([], 'endless').length, 0);
     });
 
     test('does not mutate the input array', () => {
       const copy = [...sampleCountries];
-      getCountryPool(sampleCountries, 'easy');
+      getCountryPool(sampleCountries, 'practice');
       assertEqual(sampleCountries.length, copy.length);
     });
 
@@ -506,19 +491,9 @@
 
     suite('getActiveTier() — non-endless modes always neutral');
 
-    test('easy mode → always easy regardless of streak', () => {
-      assertEqual(getActiveTier('easy', 0),   'easy');
-      assertEqual(getActiveTier('easy', 999), 'easy');
-    });
-
-    test('medium mode → always easy (neutral outside endless)', () => {
-      assertEqual(getActiveTier('medium', 0),   'easy');
-      assertEqual(getActiveTier('medium', 999), 'easy');
-    });
-
-    test('hard mode → always easy (neutral outside endless)', () => {
-      assertEqual(getActiveTier('hard', 0),   'easy');
-      assertEqual(getActiveTier('hard', 999), 'easy');
+    test('practice mode → always easy regardless of streak', () => {
+      assertEqual(getActiveTier('practice', 0),   'easy');
+      assertEqual(getActiveTier('practice', 999), 'easy');
     });
 
     suite('getActiveTier() — endless mode tier boundaries');
@@ -666,98 +641,56 @@
       }
     }
 
-    suite('storage — getPlayerName / setPlayerName');
+    suite('storage — getHighScore');
 
-    test('getPlayerName() returns null when not set', () =>
+    test('returns 0 when nothing stored', () =>
       withMockStorage(() => {
-        assertEqual(getPlayerName(), null);
+        assertEqual(getHighScore(), 0);
       }));
 
-    test('setPlayerName / getPlayerName round-trip', () =>
+    test('returns stored value after updateHighScore', () =>
       withMockStorage(() => {
-        setPlayerName('alice');
-        assertEqual(getPlayerName(), 'alice');
+        updateHighScore(42);
+        assertEqual(getHighScore(), 42);
       }));
 
-    suite('storage — addScore');
-
-    test('addScore is a no-op when streak < 1 (streak 0)', () =>
+    test('returns 0 on corrupt stored data', () =>
       withMockStorage((_, store) => {
-        addScore({ name: 'bob', streak: 0, mode: 'easy' });
-        assert(!Object.prototype.hasOwnProperty.call(store, SCORES_KEY), 'expected no entry in store');
+        store[HIGH_SCORE_KEY] = 'not-a-number';
+        assertEqual(getHighScore(), 0);
       }));
 
-    test('addScore is a no-op when streak < 1 (streak -1)', () =>
+    suite('storage — updateHighScore');
+
+    test('returns true when a new record is set', () =>
+      withMockStorage(() => {
+        assert(updateHighScore(10) === true, 'expected true on new record');
+      }));
+
+    test('returns false when streak does not beat current high score', () =>
+      withMockStorage(() => {
+        updateHighScore(10);
+        assert(updateHighScore(10) === false, 'equal streak should not update');
+        assert(updateHighScore(5)  === false, 'lower streak should not update');
+      }));
+
+    test('does not overwrite a higher score with a lower one', () =>
+      withMockStorage(() => {
+        updateHighScore(20);
+        updateHighScore(5);
+        assertEqual(getHighScore(), 20);
+      }));
+
+    test('streak of 0 is a no-op (high score starts at 0)', () =>
       withMockStorage((_, store) => {
-        addScore({ name: 'bob', streak: -1, mode: 'easy' });
-        assert(!Object.prototype.hasOwnProperty.call(store, SCORES_KEY), 'expected no entry in store');
+        assert(updateHighScore(0) === false, 'streak 0 should not set a new record');
+        assert(!Object.prototype.hasOwnProperty.call(store, HIGH_SCORE_KEY), 'store should be empty');
       }));
 
-    test('addScore stores correct shape { name, streak, mode, timestamp }', () =>
+    test('stores the correct streak value', () =>
       withMockStorage(() => {
-        const before = Date.now();
-        addScore({ name: 'alice', streak: 5, mode: 'hard' });
-        const after = Date.now();
-        const scores = _loadScores();
-        assertEqual(scores.length, 1);
-        assertEqual(scores[0].name, 'alice');
-        assertEqual(scores[0].streak, 5);
-        assertEqual(scores[0].mode, 'hard');
-        assert(scores[0].timestamp >= before && scores[0].timestamp <= after, 'timestamp out of range');
-      }));
-
-    test('addScore trims to MAX_SCORES after inserting 101 entries', () =>
-      withMockStorage(() => {
-        for (let i = 0; i < MAX_SCORES + 1; i++) {
-          addScore({ name: 'player', streak: i + 1, mode: 'easy' });
-        }
-        const scores = _loadScores();
-        assert(scores.length <= MAX_SCORES, `expected <= ${MAX_SCORES}, got ${scores.length}`);
-      }));
-
-    suite('storage — getLeaderboard / sorting');
-
-    test('getLeaderboard returns empty array when nothing stored', () =>
-      withMockStorage(() => {
-        assertEqual(getLeaderboard().length, 0);
-      }));
-
-    test('getLeaderboard sorts endless before hard before medium before easy', () =>
-      withMockStorage(() => {
-        addScore({ name: 'a', streak: 1, mode: 'easy'    });
-        addScore({ name: 'b', streak: 1, mode: 'medium'  });
-        addScore({ name: 'c', streak: 1, mode: 'hard'    });
-        addScore({ name: 'd', streak: 1, mode: 'endless' });
-        const lb = getLeaderboard();
-        assertEqual(lb[0].mode, 'endless');
-        assertEqual(lb[1].mode, 'hard');
-        assertEqual(lb[2].mode, 'medium');
-        assertEqual(lb[3].mode, 'easy');
-      }));
-
-    test('getLeaderboard sorts by streak within the same mode', () =>
-      withMockStorage(() => {
-        addScore({ name: 'a', streak: 3, mode: 'hard' });
-        addScore({ name: 'b', streak: 7, mode: 'hard' });
-        addScore({ name: 'c', streak: 1, mode: 'hard' });
-        const lb = getLeaderboard();
-        assertEqual(lb[0].streak, 7);
-        assertEqual(lb[1].streak, 3);
-        assertEqual(lb[2].streak, 1);
-      }));
-
-    suite('storage — _loadScores corrupt data');
-
-    test('_loadScores returns [] on corrupt JSON', () =>
-      withMockStorage((_, store) => {
-        store[SCORES_KEY] = '{ not valid json [[[';
-        assertEqual(_loadScores().length, 0);
-      }));
-
-    test('_loadScores returns [] when stored value is non-array JSON', () =>
-      withMockStorage((_, store) => {
-        store[SCORES_KEY] = JSON.stringify({ oops: true });
-        assertEqual(_loadScores().length, 0);
+        updateHighScore(57);
+        assertEqual(getHighScore(), 57);
       }));
 
     // ── Summary ────────────────────────────────────────────────────────────────

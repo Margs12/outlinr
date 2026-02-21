@@ -56,7 +56,8 @@ h1 {
   color: #f0f0f0;
 }
 
-#streak-display {
+#streak-display,
+#high-score-display {
   font-size: 0.8rem;
   color: #555;
   letter-spacing: 0.05em;
@@ -67,6 +68,12 @@ h1 {
   color: #f0f0f0;
   margin-left: 0.25rem;
   transition: color 0.5s ease;
+}
+
+#high-score-count {
+  font-weight: 700;
+  color: #f0f0f0;
+  margin-left: 0.25rem;
 }
 
 body[data-tier="medium"] #streak-count { color: #d4a94e; }
@@ -177,7 +184,7 @@ main {
   100% { fill: #d8d8d8; }
 }
 
-/* ── Completion animation (easy mode perfect streak) ────── */
+/* ── Completion animation ────────────────────────────────── */
 #shape-svg.completion {
   animation:
     svg-completion-scale 2.8s ease-out forwards,
@@ -264,15 +271,6 @@ main {
   text-align: center;
 }
 
-/* ── Expert round progress ───────────────────────────────── */
-#round-progress {
-  font-size: 0.72rem;
-  color: #333;
-  letter-spacing: 0.06em;
-  text-align: center;
-  min-height: 1.1rem;
-}
-
 /* ── Feedback ────────────────────────────────────────────── */
 #feedback {
   min-height: 1.4rem;
@@ -291,125 +289,4 @@ main {
 @keyframes fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
-}
-
-/* ── Overlays ────────────────────────────────────────────── */
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 100;
-}
-
-.overlay[hidden] {
-  display: none;
-}
-
-.overlay-card {
-  background: #111;
-  color: #f0f0f0;
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
-  max-width: 400px;
-  width: calc(100% - 2rem);
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.overlay-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.9rem;
-  letter-spacing: 0.06em;
-}
-
-.overlay-input-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  border-bottom: 1px solid #333;
-  padding-bottom: 0.4rem;
-}
-
-#name-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: #f0f0f0;
-  font-family: inherit;
-  font-size: 1rem;
-  outline: none;
-  letter-spacing: 0.03em;
-  caret-color: #f0f0f0;
-}
-
-#name-input::placeholder {
-  color: #333;
-}
-
-#name-submit,
-#scores-btn,
-#leaderboard-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-family: inherit;
-  letter-spacing: 0.06em;
-  color: #333;
-  padding: 0.2rem 0.4rem;
-  transition: color 0.15s;
-}
-
-#name-submit:hover,
-#scores-btn:hover,
-#leaderboard-close:hover {
-  color: #888;
-}
-
-/* ── Leaderboard ─────────────────────────────────────────── */
-#leaderboard-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.leaderboard-row {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  color: #555;
-}
-
-.leaderboard-row.self {
-  color: #f0f0f0;
-  font-weight: 700;
-}
-
-.lb-rank {
-  color: #333;
-  width: 2ch;
-  flex-shrink: 0;
-}
-
-.lb-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lb-score {
-  color: #888;
-  letter-spacing: 0.05em;
-  flex-shrink: 0;
 }

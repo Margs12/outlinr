@@ -4,14 +4,14 @@
 
 import { loadCountries }                         from './data.js';
 import { showCountry, playAnimation, updateStreak, updateTier, updateVignetteOpacity,
-         setInputLocked, shakeInput, showAnswer, hideAnswer,
+         updateHighScoreDisplay, setInputLocked, shakeInput, showAnswer, hideAnswer,
          showLoadError, showLoading, hideLoading,
-         updateModeButtons, updateRoundProgress,
-         showNameEntry, showLeaderboard, hideLeaderboard } from './renderer.js';
+         updateModeButtons } from './renderer.js';
 import { playCorrect, playMilestone, playWrong, playCompletion, unlockAudio } from './audio.js';
 import { normalise, matches, shuffle }           from './utils.js';
-import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode, getActiveTier, computeVignetteOpacity } from './gameState.js';
-import { getPlayerName, setPlayerName, addScore, getLeaderboard } from './storage.js';
+import { isValidMode, getCountryPool, classifyCorrectGuess,
+         getActiveTier, computeVignetteOpacity } from './gameState.js';
+import { getHighScore, updateHighScore } from './storage.js';
 
 // ── Timing constants ──────────────────────────────────────────────────────────
 
@@ -25,13 +25,13 @@ const TIMINGS = {
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const state = {
-  countries:    [],       // Full country list (loaded once, all tiers)
-  remaining:    [],       // Shuffle queue — refilled when empty
-  current:      null,     // Country currently being shown
-  streak:       0,        // Correct answers in a row
-  animating:    false,    // Guard: blocks input during animation delay
-  mode:         'endless', // 'easy' | 'medium' | 'hard' | 'endless'
-  endlessTier:  null,     // Active tier in endless mode — detects tier transitions
+  countries:    [],        // Full country list (loaded once, all tiers)
+  remaining:    [],        // Shuffle queue — used by practice mode
+  current:      null,      // Country currently being shown
+  streak:       0,         // Correct answers in a row
+  animating:    false,     // Guard: blocks input during animation delay
+  mode:         'endless', // 'practice' | 'endless'
+  endlessTier:  null,      // Active tier in endless mode — detects tier transitions
 };
 
 // Cached pool for the current mode — invalidated whenever mode changes.
@@ -48,8 +48,8 @@ function countryPool() {
 
 /**
  * Show the next country.
- * Endless mode: weighted random draw from all countries based on current streak.
- * Other modes: pop from a shuffle queue, refilling when empty to loop indefinitely.
+ * Endless mode: per-tier shuffle queues that advance through easy → medium → hard → expert.
+ * Practice mode: shuffle queue over all countries, loops indefinitely.
  */
 function advance() {
   const pool = countryPool();
@@ -77,15 +77,13 @@ function advance() {
 
     state.current = state.remaining.pop();
     showCountry(state.current);
-    updateRoundProgress(0, 0);
     return;
   }
 
+  // Practice mode: shuffle queue over all countries, refill when exhausted
   if (state.remaining.length === 0) {
-    // Reshuffle the current mode's pool, never repeat the last country
     const fresh = shuffle(pool);
     if (state.current && fresh[fresh.length - 1].id === state.current.id) {
-      // Swap last with a random earlier element to avoid immediate repeat
       const swapIdx = Math.floor(Math.random() * (fresh.length - 1));
       [fresh[swapIdx], fresh[fresh.length - 1]] = [fresh[fresh.length - 1], fresh[swapIdx]];
     }
@@ -94,7 +92,6 @@ function advance() {
 
   state.current = state.remaining.pop();
   showCountry(state.current);
-  updateRoundProgress(0, 0);
 }
 
 /** Check whether the player's input matches the current country. */
@@ -111,7 +108,7 @@ function isCorrect(input) {
  */
 function handleStreakReset(doShake) {
   state.streak    = 0;
-  state.remaining = []; // Force reshuffle on next advance() for queue-based modes
+  state.remaining = []; // Force reshuffle on next advance() for practice mode
   state.animating = true;
 
   updateStreak(0);
@@ -145,10 +142,15 @@ function handleGuess(raw) {
     state.streak += 1;
     state.animating = true;
 
-    // Completion: player has correctly named every country in the pool without a mistake
-    const result       = classifyCorrectGuess(state.streak, countryPool().length);
-    const isCompletion = result === 'completion';
-    const isMilestone  = result === 'milestone';
+    const result = classifyCorrectGuess(state.streak, countryPool().length);
+
+    // Completion: all expert countries guessed without a single miss.
+    // Detected when the expert shuffle queue is empty after a correct answer.
+    const isCompletion = state.mode === 'endless'
+      && getActiveTier('endless', state.streak) === 'expert'
+      && state.remaining.length === 0;
+
+    const isMilestone = result === 'milestone' && !isCompletion;
 
     setInputLocked(true);
     updateStreak(state.streak);
@@ -156,13 +158,15 @@ function handleGuess(raw) {
     updateVignetteOpacity(computeVignetteOpacity(state.mode, state.streak));
 
     if (isCompletion) {
+      updateHighScore(state.streak);
+      updateHighScoreDisplay(getHighScore());
       playCompletion().catch(e => console.error('[audio] playCompletion failed:', e));
       playAnimation('completion');
-      showAnswer(`${state.mode} mode complete!`);
+      showAnswer('all countries mastered!');
       setTimeout(() => {
         hideAnswer();
         state.animating = false; // Clear before resetState so the animating guard in setMode passes
-        resetState(nextMode(state.mode)); // Advance to next tier (endless clamps and reshuffles)
+        resetState('endless');
       }, TIMINGS.COMPLETION_MS);
     } else {
       if (isMilestone) {
@@ -180,8 +184,10 @@ function handleGuess(raw) {
     }
 
   } else {
+    // Record high score on wrong answer in endless mode
     if (state.mode === 'endless' && state.streak > 0) {
-      addScore({ name: getPlayerName() ?? 'anonymous', streak: state.streak, mode: state.mode });
+      updateHighScore(state.streak);
+      updateHighScoreDisplay(getHighScore());
     }
     handleStreakReset(true); // Wrong answer — shake
   }
@@ -191,9 +197,9 @@ function handleGuess(raw) {
 
 /**
  * Reset all game state for the given mode and start a fresh round.
- * Called both by setMode (user clicks a button) and by the completion
- * handler (auto-advance to next tier). Does NOT guard against animating —
- * callers are responsible for clearing state.animating first if needed.
+ * Called both by setMode (user clicks a button) and by the completion handler.
+ * Does NOT guard against animating — callers are responsible for clearing
+ * state.animating first if needed.
  */
 function resetState(mode) {
   state.mode        = mode;
@@ -202,13 +208,13 @@ function resetState(mode) {
   state.animating   = false;
   state.endlessTier = null; // Force tier queue rebuild on next advance()
   state.remaining   = mode === 'endless' ? [] : shuffle(countryPool());
-  state.current   = null;
+  state.current     = null;
   updateStreak(0);
   updateTier(getActiveTier(mode, 0));
   updateVignetteOpacity(computeVignetteOpacity(mode, 0));
   updateModeButtons(mode);
   setInputLocked(false);
-  advance(); // advance() also updates round-progress display
+  advance();
 }
 
 /** Handle a user clicking a mode button. */
@@ -218,7 +224,7 @@ function setMode(mode) {
     return;
   }
   if (state.animating) return; // Block mode switch during active animation
-  if (mode === state.mode) return; // Clicking the already-active mode is a no-op
+  if (mode === state.mode) return; // Already in this mode — no-op
   resetState(mode);
 }
 
@@ -237,39 +243,21 @@ async function init() {
     }
   });
 
-  // Mode toggle buttons
+  // Practice button toggles between practice and endless (main) mode
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       unlockAudio();
-      setMode(btn.dataset.mode);
+      const target = state.mode === 'practice' ? 'endless' : 'practice';
+      setMode(target);
     });
-  });
-
-  // Wire scores button
-  document.getElementById('scores-btn').addEventListener('click', () => {
-    showLeaderboard(getLeaderboard(), getPlayerName());
-  });
-
-  // Wire leaderboard close button
-  document.getElementById('leaderboard-close').addEventListener('click', () => {
-    hideLeaderboard();
   });
 
   showLoading();
   try {
     state.countries = await loadCountries();
     hideLoading();
+    updateHighScoreDisplay(getHighScore());
     resetState(state.mode);
-
-    // Show name entry on first visit (no stored player name)
-    if (!getPlayerName()) {
-      setInputLocked(true);
-      showNameEntry(name => {
-        setPlayerName(name);
-        setInputLocked(false);
-        document.getElementById('guess-input').focus();
-      });
-    }
   } catch (err) {
     showLoadError(err.message, init);
   }

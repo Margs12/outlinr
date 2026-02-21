@@ -2,7 +2,7 @@
 // Extracted from game.js so they can be imported and tested independently
 // without triggering any DOM access or module-level side effects.
 
-export const MODE_ORDER = ['easy', 'medium', 'hard', 'endless'];
+export const MODE_ORDER = ['practice', 'endless'];
 
 /** Returns true if mode is a valid game mode string. */
 export function isValidMode(mode) {
@@ -22,16 +22,15 @@ export function nextMode(mode) {
 }
 
 /**
- * Filter the full country list to the playable pool for a given mode.
- * For 'endless', returns all countries (weighted selection happens at draw time).
+ * Return the full country list for any mode.
+ * Both 'practice' and 'endless' use the complete pool.
  *
  * @param {Array<{tier: string}>} countries
  * @param {string} mode
  * @returns {Array}
  */
 export function getCountryPool(countries, mode) {
-  if (mode === 'endless') return [...countries];
-  return countries.filter(c => c.tier === mode);
+  return [...countries];
 }
 
 /**
