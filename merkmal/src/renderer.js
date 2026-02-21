@@ -63,7 +63,8 @@ export function updateVignetteOpacity(opacity) {
 }
 
 export function setInputLocked(locked) {
-  guessInput.disabled = locked;
+  guessInput.readOnly = locked;
+  guessInput.classList.toggle('locked', locked);
   if (!locked) {
     guessInput.value = '';
     guessInput.focus();

@@ -153,8 +153,10 @@ async function init() {
   input.addEventListener('keydown', e => {
     unlockAudio();
     if (e.key === 'Enter') {
+      e.preventDefault(); // Prevent iOS Safari from auto-blurring the input
       const value = input.value;
       input.value = '';
+      input.focus();     // Explicitly retain focus so the keyboard stays open
       handleGuess(value);
     }
   });

@@ -216,7 +216,8 @@ main {
   color: #333;
 }
 
-#guess-input:disabled {
+#guess-input:disabled,
+#guess-input.locked {
   opacity: 0.3;
   cursor: not-allowed;
 }

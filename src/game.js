@@ -194,8 +194,10 @@ async function init() {
   input.addEventListener('keydown', e => {
     unlockAudio(); // Must be called synchronously within the user gesture
     if (e.key === 'Enter') {
+      e.preventDefault(); // Prevent iOS Safari from auto-blurring the input
       const value = input.value;
       input.value = ''; // Always clear on Enter (correct or wrong)
+      input.focus();     // Explicitly retain focus so the keyboard stays open
       handleGuess(value);
     }
   });
