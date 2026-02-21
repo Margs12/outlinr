@@ -57,11 +57,10 @@ export function classifyCorrectGuess(newStreak, poolSize) {
  * Brackets: [maxStreak (inclusive), { tier: weight }]
  */
 const ENDLESS_WEIGHT_BRACKETS = [
-  [10,       { easy: 0.80, medium: 0.20, hard: 0.00, expert: 0.00 }],
-  [20,       { easy: 0.50, medium: 0.50, hard: 0.00, expert: 0.00 }],
-  [30,       { easy: 0.15, medium: 0.45, hard: 0.40, expert: 0.00 }],
-  [40,       { easy: 0.05, medium: 0.20, hard: 0.75, expert: 0.00 }],
-  [Infinity, { easy: 0.00, medium: 0.05, hard: 0.30, expert: 0.65 }],
+  [20,       { easy: 1.00, medium: 0.00, hard: 0.00, expert: 0.00 }],
+  [40,       { easy: 0.00, medium: 1.00, hard: 0.00, expert: 0.00 }],
+  [60,       { easy: 0.00, medium: 0.00, hard: 1.00, expert: 0.00 }],
+  [Infinity, { easy: 0.00, medium: 0.00, hard: 0.00, expert: 1.00 }],
 ];
 
 const ENDLESS_TIERS = ['easy', 'medium', 'hard', 'expert'];

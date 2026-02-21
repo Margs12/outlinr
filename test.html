@@ -365,46 +365,40 @@
 
     suite('getEndlessWeights()');
 
-    test('streak 0 → beginner weights (easy dominant, no hard/expert)', () => {
-      const w = getEndlessWeights(0);
-      assert(w.easy > w.medium && w.easy > w.hard && w.easy > w.expert,
-        'easy should have the highest weight at streak 0');
-      assertEqual(w.hard, 0, 'hard should be 0 in beginner bracket');
-      assertEqual(w.expert, 0, 'expert should be 0 in beginner bracket');
+    test('streak 0–20 → 100% easy', () => {
+      for (const s of [0, 1, 20]) {
+        const w = getEndlessWeights(s);
+        assertEqual(w.easy, 1, `easy should be 1.0 at streak ${s}`);
+        assertEqual(w.medium, 0); assertEqual(w.hard, 0); assertEqual(w.expert, 0);
+      }
     });
 
-    test('streak 10 → still first bracket (boundary)', () => {
-      assertEqual(JSON.stringify(getEndlessWeights(10)), JSON.stringify(getEndlessWeights(0)),
-        'streak 10 should be in the same bracket as streak 0');
+    test('streak 21–40 → 100% medium', () => {
+      for (const s of [21, 30, 40]) {
+        const w = getEndlessWeights(s);
+        assertEqual(w.medium, 1, `medium should be 1.0 at streak ${s}`);
+        assertEqual(w.easy, 0); assertEqual(w.hard, 0); assertEqual(w.expert, 0);
+      }
     });
 
-    test('streak 11 → second bracket (easy weight drops)', () => {
-      assert(getEndlessWeights(11).easy < getEndlessWeights(10).easy,
-        'easy weight should drop when crossing into streak 11+ bracket');
+    test('streak 41–60 → 100% hard', () => {
+      for (const s of [41, 50, 60]) {
+        const w = getEndlessWeights(s);
+        assertEqual(w.hard, 1, `hard should be 1.0 at streak ${s}`);
+        assertEqual(w.easy, 0); assertEqual(w.medium, 0); assertEqual(w.expert, 0);
+      }
     });
 
-    test('streak 20 → hard still 0 (hard must not appear before streak 21)', () => {
-      assertEqual(getEndlessWeights(20).hard, 0, 'hard should be 0 at streak 20');
-    });
-
-    test('streak 21 → hard > 0 (hard introduced at streak 21)', () => {
-      assert(getEndlessWeights(21).hard > 0, 'hard should be positive at streak 21');
-    });
-
-    test('streak 40 → expert still 0 (expert must not appear before streak 41)', () => {
-      assertEqual(getEndlessWeights(40).expert, 0, 'expert should be 0 at streak 40');
-    });
-
-    test('streak 41 → expert > 0 (expert introduced at streak 41)', () => {
-      assert(getEndlessWeights(41).expert > 0, 'expert should be positive at streak 41');
-    });
-
-    test('streak 41 → easy weight is 0', () => {
-      assertEqual(getEndlessWeights(41).easy, 0);
+    test('streak 61+ → 100% expert', () => {
+      for (const s of [61, 100, 999]) {
+        const w = getEndlessWeights(s);
+        assertEqual(w.expert, 1, `expert should be 1.0 at streak ${s}`);
+        assertEqual(w.easy, 0); assertEqual(w.medium, 0); assertEqual(w.hard, 0);
+      }
     });
 
     test('each bracket weights sum to 1.0', () => {
-      for (const streak of [5, 15, 25, 35, 45]) {
+      for (const streak of [10, 30, 50, 70]) {
         const w = getEndlessWeights(streak);
         const sum = w.easy + w.medium + w.hard + w.expert;
         assert(Math.abs(sum - 1.0) < 0.0001,
@@ -475,38 +469,35 @@
       try { return fn(); } finally { Math.random = orig; }
     }
 
-    // Streak 0 bracket: easy=0.65, medium=0.25, hard=0.08, expert=0.02
-    // Math.random=0 → rand=0 → first non-zero tier wins → easy
-    test('streak 0, rand=0 → draws easy (first/heaviest tier)', () => {
-      const result = withMockRandom(0, () => drawEndlessCountry(endlessPool, 0, null));
-      assertEqual(result.tier, 'easy');
+    // Streak 0-20: 100% easy → any rand value draws easy
+    test('streak 10 → always draws easy regardless of rand', () => {
+      for (const rand of [0, 0.5, 0.9999]) {
+        const result = withMockRandom(rand, () => drawEndlessCountry(endlessPool, 10, null));
+        assertEqual(result.tier, 'easy', `expected easy at streak 10 with rand=${rand}`);
+      }
     });
 
-    // Math.random=0.9999 → rand just under totalWeight → last non-zero tier wins → medium
-    // (hard=0 and expert=0 in bracket 1, so medium is last with positive weight)
-    test('streak 0, rand≈1 → draws medium (last tier with positive weight in beginner bracket)', () => {
-      const result = withMockRandom(0.9999, () => drawEndlessCountry(endlessPool, 0, null));
-      assertEqual(result.tier, 'medium');
+    // Streak 21-40: 100% medium → any rand value draws medium
+    test('streak 30 → always draws medium regardless of rand', () => {
+      for (const rand of [0, 0.5, 0.9999]) {
+        const result = withMockRandom(rand, () => drawEndlessCountry(endlessPool, 30, null));
+        assertEqual(result.tier, 'medium', `expected medium at streak 30 with rand=${rand}`);
+      }
     });
 
-    // Streak 45 bracket: easy=0 (skipped), medium=0.05, hard=0.30, expert=0.65
-    // Math.random=0 → rand=0 → first non-zero tier = medium
-    test('streak 45, rand=0 → draws medium (first tier with positive weight, easy skipped)', () => {
-      const result = withMockRandom(0, () => drawEndlessCountry(endlessPool, 45, null));
-      assertEqual(result.tier, 'medium');
+    // Streak 41-60: 100% hard → any rand value draws hard
+    test('streak 50 → always draws hard regardless of rand', () => {
+      for (const rand of [0, 0.5, 0.9999]) {
+        const result = withMockRandom(rand, () => drawEndlessCountry(endlessPool, 50, null));
+        assertEqual(result.tier, 'hard', `expected hard at streak 50 with rand=${rand}`);
+      }
     });
 
-    // Math.random=0.9999 → rand just under 1.0 → last tier = expert
-    test('streak 45, rand≈1 → draws expert (dominant tier)', () => {
-      const result = withMockRandom(0.9999, () => drawEndlessCountry(endlessPool, 45, null));
-      assertEqual(result.tier, 'expert');
-    });
-
-    // easy weight is literally 0 at streak 41+ — tier is skipped unconditionally
-    test('streak 41+ never draws easy (weight=0, tier is skipped unconditionally)', () => {
-      for (let i = 0; i < 30; i++) {
-        const result = drawEndlessCountry(endlessPool, 41, null);
-        assert(result.tier !== 'easy', `draw ${i} returned easy, expected medium/hard/expert`);
+    // Streak 61+: 100% expert → any rand value draws expert
+    test('streak 65 → always draws expert regardless of rand', () => {
+      for (const rand of [0, 0.5, 0.9999]) {
+        const result = withMockRandom(rand, () => drawEndlessCountry(endlessPool, 65, null));
+        assertEqual(result.tier, 'expert', `expected expert at streak 65 with rand=${rand}`);
       }
     });
 
