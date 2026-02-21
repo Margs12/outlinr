@@ -73,12 +73,12 @@ export function updateVignetteOpacity(opacity) {
  * Lock the input while an animation is playing so rapid keypresses
  * cannot queue up multiple guesses.
  *
- * Uses `readOnly` instead of `disabled` so the element stays focusable
- * and the mobile virtual keyboard does not dismiss between guesses.
- * The `state.animating` guard in game.js prevents double-processing.
+ * Visual-only lock: dims the input via a CSS class but never sets
+ * disabled/readOnly, which would cause iOS Safari to dismiss the
+ * virtual keyboard. Double-submission is prevented by state.animating
+ * in game.js.
  */
 export function setInputLocked(locked) {
-  guessInput.readOnly = locked;
   guessInput.classList.toggle('locked', locked);
   if (!locked) {
     guessInput.value = '';
