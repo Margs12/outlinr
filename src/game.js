@@ -10,7 +10,7 @@ import { showCountry, playAnimation, updateStreak,
          showNameEntry, showLeaderboard, hideLeaderboard } from './renderer.js';
 import { playCorrect, playMilestone, playWrong, playCompletion, unlockAudio } from './audio.js';
 import { normalise, matches, shuffle }           from './utils.js';
-import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode } from './gameState.js';
+import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode, drawEndlessCountry } from './gameState.js';
 import { getPlayerName, setPlayerName, addScore, getLeaderboard } from './storage.js';
 
 // ── Timing constants ──────────────────────────────────────────────────────────
@@ -30,7 +30,7 @@ const state = {
   current:     null,   // Country currently being shown
   streak:      0,      // Correct answers in a row
   animating:   false,  // Guard: blocks input during animation delay
-  mode:        'easy', // 'easy' | 'medium' | 'hard' | 'expert'
+  mode:        'endless', // 'easy' | 'medium' | 'hard' | 'endless'
 };
 
 // Cached pool for the current mode — invalidated whenever mode changes.
@@ -46,9 +46,9 @@ function countryPool() {
 // ── Game loop ─────────────────────────────────────────────────────────────────
 
 /**
- * Pop the next country from the shuffle queue.
- * When the queue empties, reshuffle all countries so the game loops
- * indefinitely without repeating the same country twice in a row.
+ * Show the next country.
+ * Endless mode: weighted random draw from all countries based on current streak.
+ * Other modes: pop from a shuffle queue, refilling when empty to loop indefinitely.
  */
 function advance() {
   const pool = countryPool();
@@ -56,6 +56,15 @@ function advance() {
     showLoadError(`No countries available for "${state.mode}" mode.`);
     return;
   }
+
+  // Endless mode: weighted random draw on each turn, no shuffle queue
+  if (state.mode === 'endless') {
+    state.current = drawEndlessCountry(state.countries, state.streak, state.current);
+    showCountry(state.current);
+    updateRoundProgress(0, 0);
+    return;
+  }
+
   if (state.remaining.length === 0) {
     // Reshuffle the current mode's pool, never repeat the last country
     const fresh = shuffle(pool);
@@ -69,13 +78,7 @@ function advance() {
 
   state.current = state.remaining.pop();
   showCountry(state.current);
-
-  // Show round progress in expert mode (derived from remaining queue length)
-  if (state.mode === 'expert') {
-    updateRoundProgress(pool.length - state.remaining.length, pool.length);
-  } else {
-    updateRoundProgress(0, 0); // Clear when not in expert
-  }
+  updateRoundProgress(0, 0);
 }
 
 /** Check whether the player's input matches the current country. */
@@ -92,7 +95,7 @@ function isCorrect(input) {
  */
 function handleStreakReset(doShake) {
   state.streak    = 0;
-  state.remaining = []; // Force reshuffle so the round counter resets on next advance()
+  state.remaining = []; // Force reshuffle on next advance() for queue-based modes
   state.animating = true;
 
   updateStreak(0);
@@ -139,7 +142,7 @@ function handleGuess(raw) {
       setTimeout(() => {
         hideAnswer();
         state.animating = false; // Clear before resetState so the animating guard in setMode passes
-        resetState(nextMode(state.mode)); // Advance to next tier (expert clamps and reshuffles)
+        resetState(nextMode(state.mode)); // Advance to next tier (endless clamps and reshuffles)
       }, TIMINGS.COMPLETION_MS);
     } else {
       if (isMilestone) {
@@ -157,7 +160,7 @@ function handleGuess(raw) {
     }
 
   } else {
-    if (state.streak > 0) {
+    if (state.mode === 'endless' && state.streak > 0) {
       addScore({ name: getPlayerName() ?? 'anonymous', streak: state.streak, mode: state.mode });
     }
     handleStreakReset(true); // Wrong answer — shake
@@ -177,7 +180,7 @@ function resetState(mode) {
   _cachedPool     = null; // Invalidate pool cache
   state.streak    = 0;
   state.animating = false;
-  state.remaining = shuffle(countryPool());
+  state.remaining = mode === 'endless' ? [] : shuffle(countryPool());
   state.current   = null;
   updateStreak(0);
   updateModeButtons(mode);
@@ -233,8 +236,7 @@ async function init() {
   try {
     state.countries = await loadCountries();
     hideLoading();
-    state.remaining = shuffle(countryPool());
-    advance();
+    resetState(state.mode);
 
     // Show name entry on first visit (no stored player name)
     if (!getPlayerName()) {

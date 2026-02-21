@@ -22,7 +22,8 @@
   <script type="module">
     import { normalise, matches, shuffle, escapeHtml } from './src/utils.js';
     import { featureToSvgPath, keepLargestPolygon, loadCountries } from './src/data.js';
-    import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode, MODE_ORDER } from './src/gameState.js';
+    import { isValidMode, getCountryPool, classifyCorrectGuess, nextMode, MODE_ORDER,
+             getEndlessWeights, drawEndlessCountry } from './src/gameState.js';
     import {
       PLAYER_KEY, SCORES_KEY, MAX_SCORES,
       getPlayerName, setPlayerName, addScore, getLeaderboard,
@@ -273,7 +274,7 @@
     test('"easy" is valid',   () => assert(isValidMode('easy')));
     test('"medium" is valid', () => assert(isValidMode('medium')));
     test('"hard" is valid',   () => assert(isValidMode('hard')));
-    test('"expert" is valid', () => assert(isValidMode('expert')));
+    test('"endless" is valid', () => assert(isValidMode('endless')));
     test('"extreme" is invalid', () => assert(!isValidMode('extreme')));
     test('undefined is invalid', () => assert(!isValidMode(undefined)));
     test('empty string is invalid', () => assert(!isValidMode('')));
@@ -283,12 +284,12 @@
 
     test('easy → medium', () => assertEqual(nextMode('easy'), 'medium'));
     test('medium → hard',  () => assertEqual(nextMode('medium'), 'hard'));
-    test('hard → expert',  () => assertEqual(nextMode('hard'), 'expert'));
-    test('expert → expert (clamps at end)', () => assertEqual(nextMode('expert'), 'expert'));
+    test('hard → endless',  () => assertEqual(nextMode('hard'), 'endless'));
+    test('endless → endless (clamps at end)', () => assertEqual(nextMode('endless'), 'endless'));
     test('MODE_ORDER has exactly 4 entries', () => assertEqual(MODE_ORDER.length, 4));
-    test('MODE_ORDER starts with easy and ends with expert', () => {
+    test('MODE_ORDER starts with easy and ends with endless', () => {
       assertEqual(MODE_ORDER[0], 'easy');
-      assertEqual(MODE_ORDER[MODE_ORDER.length - 1], 'expert');
+      assertEqual(MODE_ORDER[MODE_ORDER.length - 1], 'endless');
     });
 
     suite('getCountryPool()');
@@ -318,10 +319,15 @@
       assert(pool.every(c => c.tier === 'hard'));
     });
 
-    test('expert mode returns only expert-tier countries', () => {
-      const pool = getCountryPool(sampleCountries, 'expert');
-      assertEqual(pool.length, 1);
-      assert(pool.every(c => c.tier === 'expert'));
+    test('endless mode returns all countries regardless of tier', () => {
+      const pool = getCountryPool(sampleCountries, 'endless');
+      assertEqual(pool.length, sampleCountries.length);
+    });
+
+    test('endless mode result is a copy, not a reference to the input', () => {
+      const pool = getCountryPool(sampleCountries, 'endless');
+      pool.push({ name: 'Ghost', tier: 'easy' });
+      assertEqual(sampleCountries.length, 4, 'input array should not be mutated');
     });
 
     test('empty country list returns empty pool', () => {
@@ -342,7 +348,7 @@
       assertEqual(classifyCorrectGuess(4, 5), 'correct'));
     test('completion triggers in any mode (hard: 20/20)', () =>
       assertEqual(classifyCorrectGuess(20, 20), 'completion')); // not mode-gated
-    test('completion triggers in expert (e.g. 129/129)', () =>
+    test('completion triggers for any large pool (e.g. 129/129)', () =>
       assertEqual(classifyCorrectGuess(129, 129), 'completion'));
     test('milestone at multiples of 5', () =>
       assertEqual(classifyCorrectGuess(5, 100), 'milestone'));
@@ -354,6 +360,152 @@
       assertEqual(classifyCorrectGuess(1, 50), 'correct'));
     test('completion takes priority over milestone when pool size is multiple of 5', () =>
       assertEqual(classifyCorrectGuess(5, 5), 'completion')); // 5 % 5 === 0, but completion checked first
+
+    // ── getEndlessWeights() ────────────────────────────────────────────────────
+
+    suite('getEndlessWeights()');
+
+    test('streak 0 → beginner weights (easy dominant)', () => {
+      const w = getEndlessWeights(0);
+      assert(w.easy > w.medium && w.easy > w.hard && w.easy > w.expert,
+        'easy should have the highest weight at streak 0');
+    });
+
+    test('streak 5 → still beginner bracket (boundary)', () => {
+      const w5 = getEndlessWeights(5);
+      const w0 = getEndlessWeights(0);
+      assertEqual(JSON.stringify(w5), JSON.stringify(w0),
+        'streak 5 should be in the same bracket as streak 0');
+    });
+
+    test('streak 6 → next bracket (easy weight drops)', () => {
+      assert(getEndlessWeights(6).easy < getEndlessWeights(5).easy,
+        'easy weight should drop when crossing into streak 6+ bracket');
+    });
+
+    test('streak 30 → third bracket (boundary)', () => {
+      const w30 = getEndlessWeights(30);
+      const w16 = getEndlessWeights(16);
+      assertEqual(JSON.stringify(w30), JSON.stringify(w16),
+        'streak 30 should be in the same bracket as streak 16');
+    });
+
+    test('streak 31 → hardest bracket (expert dominant)', () => {
+      const w = getEndlessWeights(31);
+      assert(w.expert > w.hard && w.expert > w.medium && w.expert >= w.easy,
+        'expert should have the highest weight at streak 31+');
+    });
+
+    test('streak 31 → easy weight is 0', () => {
+      assertEqual(getEndlessWeights(31).easy, 0);
+    });
+
+    test('each bracket weights sum to 1.0', () => {
+      for (const streak of [0, 6, 16, 31]) {
+        const w = getEndlessWeights(streak);
+        const sum = w.easy + w.medium + w.hard + w.expert;
+        assert(Math.abs(sum - 1.0) < 0.0001,
+          `weights at streak ${streak} sum to ${sum}, expected 1.0`);
+      }
+    });
+
+    // ── drawEndlessCountry() ───────────────────────────────────────────────────
+
+    suite('drawEndlessCountry()');
+
+    const endlessPool = [
+      { id: 'e1', name: 'France',   tier: 'easy'   },
+      { id: 'e2', name: 'Germany',  tier: 'easy'   },
+      { id: 'm1', name: 'Albania',  tier: 'medium' },
+      { id: 'm2', name: 'Georgia',  tier: 'medium' },
+      { id: 'h1', name: 'Djibouti', tier: 'hard'   },
+      { id: 'h2', name: 'Comoros',  tier: 'hard'   },
+      { id: 'x1', name: 'Nauru',    tier: 'expert' },
+      { id: 'x2', name: 'Tuvalu',   tier: 'expert' },
+    ];
+
+    test('returns a country object from the pool', () => {
+      const result = drawEndlessCountry(endlessPool, 0, null);
+      assert(result && typeof result.id === 'string', 'expected a country with an id');
+      assert(endlessPool.some(c => c.id === result.id), 'result must be from the pool');
+    });
+
+    test('never returns the excluded country', () => {
+      const exclude = endlessPool[0];
+      for (let i = 0; i < 50; i++) {
+        const result = drawEndlessCountry(endlessPool, 0, exclude);
+        assert(result.id !== exclude.id, 'should never return the excluded country');
+      }
+    });
+
+    test('works with null exclude (first draw)', () => {
+      const result = drawEndlessCountry(endlessPool, 0, null);
+      assert(result !== undefined && result !== null);
+    });
+
+    test('returns a country when only one country exists (no exclusion possible)', () => {
+      const single = [{ id: 'only', name: 'Solo', tier: 'easy' }];
+      const result = drawEndlessCountry(single, 0, single[0]);
+      assert(result !== undefined, 'should return a country even when excluded is the only one');
+    });
+
+    test('at streak 31+ only draws from hard/expert (no easy in pool bias)', () => {
+      // With easy weight 0 at streak 31, no easy countries should ever be returned
+      // Replace pool with only easy countries to test the fallback weight redistribution
+      const easyOnly = [
+        { id: 'e1', name: 'France',  tier: 'easy' },
+        { id: 'e2', name: 'Germany', tier: 'easy' },
+      ];
+      // With only easy countries and easy weight=0, effective weight is 0 for all → fallback
+      // The fallback should still return a valid country
+      const result = drawEndlessCountry(easyOnly, 31, null);
+      assert(result !== undefined && result.tier === 'easy',
+        'fallback should return a country when all weighted tiers are empty');
+    });
+
+    suite('drawEndlessCountry() — deterministic tier selection via Math.random mock');
+
+    // Helper: temporarily replace Math.random with a fixed value
+    function withMockRandom(value, fn) {
+      const orig = Math.random;
+      Math.random = () => value;
+      try { return fn(); } finally { Math.random = orig; }
+    }
+
+    // Streak 0 bracket: easy=0.65, medium=0.25, hard=0.08, expert=0.02
+    // Math.random=0 → rand=0 → first non-zero tier wins → easy
+    test('streak 0, rand=0 → draws easy (first/heaviest tier)', () => {
+      const result = withMockRandom(0, () => drawEndlessCountry(endlessPool, 0, null));
+      assertEqual(result.tier, 'easy');
+    });
+
+    // Math.random=0.9999 → rand just under totalWeight → last tier wins → expert
+    test('streak 0, rand≈1 → draws expert (last tier)', () => {
+      const result = withMockRandom(0.9999, () => drawEndlessCountry(endlessPool, 0, null));
+      assertEqual(result.tier, 'expert');
+    });
+
+    // Streak 31 bracket: easy=0 (skipped), medium=0.05, hard=0.30, expert=0.65
+    // Math.random=0 → rand=0 → first non-zero tier = medium
+    test('streak 31, rand=0 → draws medium (first tier with positive weight, easy skipped)', () => {
+      const result = withMockRandom(0, () => drawEndlessCountry(endlessPool, 31, null));
+      assertEqual(result.tier, 'medium');
+    });
+
+    // Math.random=0.9999 → rand just under 1.0 → last tier = expert
+    test('streak 31, rand≈1 → draws expert (dominant tier)', () => {
+      const result = withMockRandom(0.9999, () => drawEndlessCountry(endlessPool, 31, null));
+      assertEqual(result.tier, 'expert');
+    });
+
+    // easy weight is literally 0 at streak 31 — effective weight is 0, tier is skipped
+    // This is deterministic regardless of Math.random
+    test('streak 31 never draws easy (weight=0, tier is skipped unconditionally)', () => {
+      for (let i = 0; i < 30; i++) {
+        const result = drawEndlessCountry(endlessPool, 31, null);
+        assert(result.tier !== 'easy', `draw ${i} returned easy, expected hard/medium/expert`);
+      }
+    });
 
     // ── loadCountries() — error paths (Issue 11) ──────────────────────────────
 
@@ -519,14 +671,14 @@
         assertEqual(getLeaderboard().length, 0);
       }));
 
-    test('getLeaderboard sorts expert before hard before medium before easy', () =>
+    test('getLeaderboard sorts endless before hard before medium before easy', () =>
       withMockStorage(() => {
-        addScore({ name: 'a', streak: 1, mode: 'easy'   });
-        addScore({ name: 'b', streak: 1, mode: 'medium' });
-        addScore({ name: 'c', streak: 1, mode: 'hard'   });
-        addScore({ name: 'd', streak: 1, mode: 'expert' });
+        addScore({ name: 'a', streak: 1, mode: 'easy'    });
+        addScore({ name: 'b', streak: 1, mode: 'medium'  });
+        addScore({ name: 'c', streak: 1, mode: 'hard'    });
+        addScore({ name: 'd', streak: 1, mode: 'endless' });
         const lb = getLeaderboard();
-        assertEqual(lb[0].mode, 'expert');
+        assertEqual(lb[0].mode, 'endless');
         assertEqual(lb[1].mode, 'hard');
         assertEqual(lb[2].mode, 'medium');
         assertEqual(lb[3].mode, 'easy');

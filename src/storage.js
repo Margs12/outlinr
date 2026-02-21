@@ -3,7 +3,7 @@
 export const PLAYER_KEY = 'outlinr_player_name';
 export const SCORES_KEY = 'outlinr_scores';
 export const MAX_SCORES = 100;
-export const MODE_RANK  = { easy: 0, medium: 1, hard: 2, expert: 3 };
+export const MODE_RANK  = { easy: 0, medium: 1, hard: 2, endless: 3 };
 
 export function getPlayerName() {
   return localStorage.getItem(PLAYER_KEY);
