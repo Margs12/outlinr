@@ -72,9 +72,14 @@ export function updateVignetteOpacity(opacity) {
 /**
  * Lock the input while an animation is playing so rapid keypresses
  * cannot queue up multiple guesses.
+ *
+ * Uses `readOnly` instead of `disabled` so the element stays focusable
+ * and the mobile virtual keyboard does not dismiss between guesses.
+ * The `state.animating` guard in game.js prevents double-processing.
  */
 export function setInputLocked(locked) {
-  guessInput.disabled = locked;
+  guessInput.readOnly = locked;
+  guessInput.classList.toggle('locked', locked);
   if (!locked) {
     guessInput.value = '';
     guessInput.focus();
