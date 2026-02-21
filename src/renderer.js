@@ -52,12 +52,23 @@ export function updateStreak(n) {
 
 /**
  * Set the visual tension tier on <body>.
- * CSS uses the data-tier attribute to drive the vignette and streak counter colour.
+ * CSS uses the data-tier attribute to drive the streak counter colour and
+ * the fast-fade-out transition when resetting to easy.
  *
  * @param {'easy' | 'medium' | 'hard' | 'expert'} tier
  */
 export function updateTier(tier) {
   document.body.dataset.tier = tier;
+}
+
+/**
+ * Set the vignette overlay opacity via a CSS custom property.
+ * Call this alongside updateTier whenever the streak changes.
+ *
+ * @param {number} opacity  Value in [0, 1]
+ */
+export function updateVignetteOpacity(opacity) {
+  document.body.style.setProperty('--vignette-opacity', opacity);
 }
 
 /**

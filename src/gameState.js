@@ -155,3 +155,23 @@ export function getActiveTier(mode, streak) {
   if (streak <= ENDLESS_TIER_CUTOFFS.hard)   return 'hard';
   return 'expert';
 }
+
+/**
+ * Compute the vignette overlay opacity for the current game state.
+ *
+ * Pre-expert (streak 0–60): linear ramp from 0 to 0.30.
+ * Expert (streak 61+): starts at 0.30, steps +0.30 every 20 countries, capped at 1.0.
+ * Non-endless modes always return 0 (no glow).
+ *
+ * @param {string} mode
+ * @param {number} streak
+ * @returns {number} Opacity in [0, 1]
+ */
+export function computeVignetteOpacity(mode, streak) {
+  if (mode !== 'endless') return 0;
+  const expertStart = ENDLESS_TIER_CUTOFFS.hard; // 60 — expert begins at streak > 60
+  if (streak <= expertStart) {
+    return (streak / expertStart) * 0.30;
+  }
+  return Math.min(0.30 + Math.floor((streak - expertStart) / 20) * 0.30, 1.0);
+}
