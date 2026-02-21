@@ -156,10 +156,19 @@ async function init() {
       const value = input.value;
       input.value = '';
       handleGuess(value);
-    } else if (UMLAUT_KEYS[e.key]) {
-      e.preventDefault();
-      const char = UMLAUT_KEYS[e.key];
-      input.setRangeText(char, input.selectionStart, input.selectionEnd, 'end');
+    }
+  });
+
+  // Replace 1/2/3/4 with umlauts as the user types.
+  // Using the input event (fires after the character is inserted) is more
+  // reliable than keydown + preventDefault across browsers and OSes.
+  // Each replacement is 1:1 in length so cursor position is preserved.
+  input.addEventListener('input', () => {
+    const cursor = input.selectionStart;
+    const newVal = input.value.replace(/[1234]/g, c => UMLAUT_KEYS[c] || c);
+    if (newVal !== input.value) {
+      input.value = newVal;
+      input.selectionStart = input.selectionEnd = cursor;
     }
   });
 
