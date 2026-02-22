@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>merkmal — tests</title>
+  <style>
+    body   { font-family: monospace; padding: 2rem; background: #0f0f1a; color: #c8cedf; line-height: 1.7; }
+    h1     { color: #7b8ab8; margin-bottom: 0.25rem; }
+    p.meta { color: #3e4a68; font-size: 0.85rem; margin-bottom: 2rem; }
+    .suite { margin-top: 1.5rem; color: #4a5a9a; font-weight: bold; font-size: 0.9rem; letter-spacing: 0.08em; }
+    .pass  { color: #48bb78; }
+    .fail  { color: #e05555; font-weight: bold; }
+    #summary { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #1e2a40; font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>merkmal — test suite</h1>
+  <p class="meta">Open browser console for stack traces on failures.</p>
+  <div id="results"></div>
+  <div id="summary"></div>
+
+  <script type="module">
+    import { matchAnswer, shuffle } from './src/utils.js';
+    import {
+      NOUN_HIGH_SCORE_KEY,
+      VERB_HIGH_SCORE_KEY,
+      getHighScore,
+      updateHighScore,
+    } from './src/storage.js';
+
+    // ── Minimal test harness ───────────────────────────────────────────────────
+
+    const out   = document.getElementById('results');
+    const sumEl = document.getElementById('summary');
+    let passed = 0, failed = 0;
+
+    function suite(name) {
+      const el = document.createElement('div');
+      el.className = 'suite';
+      el.textContent = `▸ ${name}`;
+      out.appendChild(el);
+    }
+
+    function test(desc, fn) {
+      const el = document.createElement('div');
+      try {
+        fn();
+        passed++;
+        el.className = 'pass';
+        el.textContent = `  ✓ ${desc}`;
+      } catch (err) {
+        failed++;
+        el.className = 'fail';
+        el.textContent = `  ✗ ${desc}  —  ${err.message}`;
+        console.error(desc, err);
+      }
+      out.appendChild(el);
+    }
+
+    async function testAsync(desc, fn) {
+      const el = document.createElement('div');
+      try {
+        await fn();
+        passed++;
+        el.className = 'pass';
+        el.textContent = `  ✓ ${desc}`;
+      } catch (err) {
+        failed++;
+        el.className = 'fail';
+        el.textContent = `  ✗ ${desc}  —  ${err.message}`;
+        console.error(desc, err);
+      }
+      out.appendChild(el);
+    }
+
+    function assert(condition, msg) {
+      if (!condition) throw new Error(msg ?? 'assertion failed');
+    }
+
+    function assertEqual(a, b, msg) {
+      if (a !== b) throw new Error(msg ?? `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
+    }
+
+    // ── localStorage mock ──────────────────────────────────────────────────────
+
+    function withMockStorage(fn) {
+      const store = {};
+      const mock = {
+        getItem:    key        => Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null,
+        setItem:    (key, val) => { store[key] = String(val); },
+        removeItem: key        => { delete store[key]; },
+      };
+      const orig = globalThis.localStorage;
+      Object.defineProperty(globalThis, 'localStorage', { value: mock, configurable: true });
+      try {
+        fn(mock, store);
+      } finally {
+        Object.defineProperty(globalThis, 'localStorage', { value: orig, configurable: true });
+      }
+    }
+
+    // ── matchAnswer() — case-sensitive (noun behaviour) ────────────────────────
+
+    suite('matchAnswer() — case-sensitive (nouns)');
+
+    const mann = { word: 'Mann' };
+    const zeit = { word: 'Zeit' };
+
+    test('exact match returns true', () =>
+      assert(matchAnswer('Mann', mann)));
+
+    test('leading/trailing whitespace is trimmed', () =>
+      assert(matchAnswer('  Mann  ', mann)));
+
+    test('lowercase input returns false (nouns are capitalised)', () =>
+      assert(!matchAnswer('mann', mann)));
+
+    test('wrong word returns false', () =>
+      assert(!matchAnswer('Zeit', mann)));
+
+    test('empty input returns false', () =>
+      assert(!matchAnswer('', mann)));
+
+    test('whitespace-only input returns false', () =>
+      assert(!matchAnswer('   ', mann)));
+
+    test('default (no options arg) is case-sensitive', () =>
+      assert(!matchAnswer('mann', mann), 'no options → case-sensitive'));
+
+    test('explicit { caseInsensitive: false } is case-sensitive', () =>
+      assert(!matchAnswer('mann', mann, { caseInsensitive: false })));
+
+    // ── matchAnswer() — case-insensitive (verb behaviour) ─────────────────────
+
+    suite('matchAnswer() — case-insensitive (verbs)');
+
+    const haben  = { word: 'haben' };
+    const koennen = { word: 'können' };
+    const heissen = { word: 'heißen' };
+
+    test('exact lowercase match returns true', () =>
+      assert(matchAnswer('haben', haben, { caseInsensitive: true })));
+
+    test('capitalised input returns true', () =>
+      assert(matchAnswer('Haben', haben, { caseInsensitive: true })));
+
+    test('all-caps input returns true', () =>
+      assert(matchAnswer('HABEN', haben, { caseInsensitive: true })));
+
+    test('wrong verb returns false even with flag', () =>
+      assert(!matchAnswer('sein', haben, { caseInsensitive: true })));
+
+    test('leading/trailing whitespace is trimmed', () =>
+      assert(matchAnswer('  Haben  ', haben, { caseInsensitive: true })));
+
+    // Umlaut edge case: ö/ü/ä handled correctly by .toLowerCase()
+    test('umlaut: Können matches können case-insensitively', () =>
+      assert(matchAnswer('Können', koennen, { caseInsensitive: true })));
+
+    test('umlaut: KÖNNEN matches können case-insensitively', () =>
+      assert(matchAnswer('KÖNNEN', koennen, { caseInsensitive: true })));
+
+    // ß: "Heißen".toLowerCase() === "heißen" — ß round-trips correctly
+    test('ß: Heißen matches heißen case-insensitively', () =>
+      assert(matchAnswer('Heißen', heissen, { caseInsensitive: true })));
+
+    // Noun regression: nouns must NOT become case-insensitive
+    test('noun regression: mann does NOT match Mann (flag absent)', () =>
+      assert(!matchAnswer('mann', mann)));
+
+    test('noun regression: zeit does NOT match Zeit (flag absent)', () =>
+      assert(!matchAnswer('zeit', zeit)));
+
+    // ── shuffle() ─────────────────────────────────────────────────────────────
+
+    suite('shuffle()');
+
+    test('returns same length', () => {
+      assertEqual(shuffle([1, 2, 3, 4, 5]).length, 5);
+    });
+
+    test('contains all original elements', () => {
+      const sorted = shuffle([1, 2, 3, 4, 5]).slice().sort((a, b) => a - b);
+      assertEqual(JSON.stringify(sorted), JSON.stringify([1, 2, 3, 4, 5]));
+    });
+
+    test('does not mutate the input array', () => {
+      const arr  = [1, 2, 3];
+      const copy = [...arr];
+      shuffle(arr);
+      assertEqual(JSON.stringify(arr), JSON.stringify(copy));
+    });
+
+    test('handles empty array', () => {
+      assertEqual(shuffle([]).length, 0);
+    });
+
+    test('handles single-element array', () => {
+      assertEqual(shuffle([42])[0], 42);
+    });
+
+    // ── storage — getHighScore ─────────────────────────────────────────────────
+
+    suite('storage — getHighScore');
+
+    test('returns 0 for nouns when nothing stored', () =>
+      withMockStorage(() => {
+        assertEqual(getHighScore('nouns'), 0);
+      }));
+
+    test('returns 0 for verbs when nothing stored', () =>
+      withMockStorage(() => {
+        assertEqual(getHighScore('verbs'), 0);
+      }));
+
+    test('returns stored value after updateHighScore (nouns)', () =>
+      withMockStorage(() => {
+        updateHighScore('nouns', 42);
+        assertEqual(getHighScore('nouns'), 42);
+      }));
+
+    test('returns stored value after updateHighScore (verbs)', () =>
+      withMockStorage(() => {
+        updateHighScore('verbs', 17);
+        assertEqual(getHighScore('verbs'), 17);
+      }));
+
+    test('returns 0 on corrupt stored data', () =>
+      withMockStorage((_, store) => {
+        store[NOUN_HIGH_SCORE_KEY] = 'not-a-number';
+        assertEqual(getHighScore('nouns'), 0);
+      }));
+
+    test('throws on unknown category', () =>
+      withMockStorage(() => {
+        let threw = false;
+        try { getHighScore('adjectives'); } catch { threw = true; }
+        assert(threw, 'expected Error for unknown category');
+      }));
+
+    // ── storage — updateHighScore ──────────────────────────────────────────────
+
+    suite('storage — updateHighScore');
+
+    test('returns true when a new record is set (nouns)', () =>
+      withMockStorage(() => {
+        assert(updateHighScore('nouns', 10) === true);
+      }));
+
+    test('returns true when a new record is set (verbs)', () =>
+      withMockStorage(() => {
+        assert(updateHighScore('verbs', 5) === true);
+      }));
+
+    test('returns false when streak does not beat current (equal)', () =>
+      withMockStorage(() => {
+        updateHighScore('nouns', 10);
+        assert(updateHighScore('nouns', 10) === false, 'equal streak should not update');
+      }));
+
+    test('returns false when streak is lower', () =>
+      withMockStorage(() => {
+        updateHighScore('nouns', 10);
+        assert(updateHighScore('nouns', 5) === false, 'lower streak should not update');
+      }));
+
+    test('does not overwrite a higher score with a lower one', () =>
+      withMockStorage(() => {
+        updateHighScore('nouns', 20);
+        updateHighScore('nouns', 5);
+        assertEqual(getHighScore('nouns'), 20);
+      }));
+
+    test('streak of 0 is a no-op', () =>
+      withMockStorage((_, store) => {
+        assert(updateHighScore('nouns', 0) === false, 'streak 0 should not set a new record');
+        assert(!Object.prototype.hasOwnProperty.call(store, NOUN_HIGH_SCORE_KEY),
+          'store should be empty after streak-0 call');
+      }));
+
+    test('throws on unknown category', () =>
+      withMockStorage(() => {
+        let threw = false;
+        try { updateHighScore('adjectives', 10); } catch { threw = true; }
+        assert(threw, 'expected Error for unknown category');
+      }));
+
+    // ── storage — category isolation ───────────────────────────────────────────
+
+    suite('storage — category isolation');
+
+    test('noun score does not affect verb score', () =>
+      withMockStorage(() => {
+        updateHighScore('nouns', 50);
+        assertEqual(getHighScore('verbs'), 0, 'verb score should still be 0');
+      }));
+
+    test('verb score does not affect noun score', () =>
+      withMockStorage(() => {
+        updateHighScore('verbs', 30);
+        assertEqual(getHighScore('nouns'), 0, 'noun score should still be 0');
+      }));
+
+    test('each category tracks independently', () =>
+      withMockStorage(() => {
+        updateHighScore('nouns', 25);
+        updateHighScore('verbs', 40);
+        assertEqual(getHighScore('nouns'), 25);
+        assertEqual(getHighScore('verbs'), 40);
+      }));
+
+    test('noun and verb keys are distinct localStorage keys', () => {
+      assert(
+        NOUN_HIGH_SCORE_KEY !== VERB_HIGH_SCORE_KEY,
+        'noun and verb keys must differ'
+      );
+    });
+
+    // ── verbs.json — structural integrity ─────────────────────────────────────
+
+    suite('verbs.json — structural integrity');
+
+    await testAsync('loads as a non-empty array of 100 entries', async () => {
+      const res = await fetch('./data/verbs.json');
+      assert(res.ok, `fetch failed with status ${res.status}`);
+      const verbs = await res.json();
+      assert(Array.isArray(verbs), 'verbs.json must be an array');
+      assertEqual(verbs.length, 100, `expected 100 verbs, got ${verbs.length}`);
+    });
+
+    await testAsync('all entries have required fields of correct types', async () => {
+      const verbs = await fetch('./data/verbs.json').then(r => r.json());
+      for (const [i, v] of verbs.entries()) {
+        assert(typeof v.id    === 'string' && v.id.length > 0,
+          `entry ${i}: id must be a non-empty string`);
+        assert(typeof v.rank  === 'number',
+          `entry ${i}: rank must be a number`);
+        assert(typeof v.word  === 'string' && v.word.length > 0,
+          `entry ${i}: word must be a non-empty string`);
+        assert(typeof v.emoji === 'string' && v.emoji.length > 0,
+          `entry ${i}: emoji must be a non-empty string`);
+        assert(Array.isArray(v.hints) && v.hints.length > 0,
+          `entry ${i}: hints must be a non-empty array`);
+      }
+    });
+
+    await testAsync('all ranks 1–100 are present (no gaps, no duplicates)', async () => {
+      const verbs = await fetch('./data/verbs.json').then(r => r.json());
+      const ranks = verbs.map(v => v.rank).sort((a, b) => a - b);
+      for (let i = 0; i < 100; i++) {
+        assertEqual(ranks[i], i + 1, `expected rank ${i + 1} at position ${i}`);
+      }
+    });
+
+    await testAsync('all ids are unique', async () => {
+      const verbs = await fetch('./data/verbs.json').then(r => r.json());
+      const ids = verbs.map(v => v.id);
+      const unique = new Set(ids);
+      assertEqual(unique.size, ids.length, `duplicate ids found: ${ids.filter((id, i) => ids.indexOf(id) !== i)}`);
+    });
+
+    await testAsync('all ids are ASCII-only (no umlauts in id field)', async () => {
+      const verbs = await fetch('./data/verbs.json').then(r => r.json());
+      for (const v of verbs) {
+        assert(/^[a-z]+$/.test(v.id), `id "${v.id}" must be lowercase ASCII letters only`);
+      }
+    });
+
+    await testAsync('all words are lowercase (verb infinitives)', async () => {
+      const verbs = await fetch('./data/verbs.json').then(r => r.json());
+      for (const v of verbs) {
+        assertEqual(v.word, v.word.toLowerCase(),
+          `word "${v.word}" must be lowercase (verb infinitive)`);
+      }
+    });
+
+    await testAsync('no article field present (verbs have no grammatical article)', async () => {
+      const verbs = await fetch('./data/verbs.json').then(r => r.json());
+      for (const v of verbs) {
+        assert(!Object.prototype.hasOwnProperty.call(v, 'article'),
+          `entry "${v.id}" must not have an article field`);
+      }
+    });
+
+    await testAsync('all hints are non-empty strings', async () => {
+      const verbs = await fetch('./data/verbs.json').then(r => r.json());
+      for (const v of verbs) {
+        for (const h of v.hints) {
+          assert(typeof h === 'string' && h.trim().length > 0,
+            `entry "${v.id}": all hints must be non-empty strings`);
+        }
+      }
+    });
+
+    // ── Summary ────────────────────────────────────────────────────────────────
+
+    const total = passed + failed;
+    sumEl.innerHTML = `
+      <strong>${total} test${total !== 1 ? 's' : ''}:
+        <span class="${failed ? 'fail' : 'pass'}">${passed} passed</span>
+        ${failed ? `, <span class="fail">${failed} failed</span>` : ''}
+      </strong>
+    `;
+  </script>
+</body>
+</html>

@@ -124,3 +124,21 @@ export function showLoadError(message, onRetry) {
     document.getElementById('retry-btn').addEventListener('click', onRetry);
   }
 }
+
+/**
+ * Mark the given category's tab as active; deactivate all others.
+ * @param {'nouns'|'verbs'} category
+ */
+export function setActiveTab(category) {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.category === category);
+  });
+}
+
+/**
+ * Update the input placeholder text (e.g. "noun..." vs "verb...").
+ * @param {string} text
+ */
+export function setPlaceholder(text) {
+  guessInput.placeholder = text;
+}

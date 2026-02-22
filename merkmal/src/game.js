@@ -1,14 +1,15 @@
 // game.js — game state and loop for Merkmal.
 
-import { loadWords }                                         from './data.js';
+import { loadWords, loadVerbs }                                from './data.js';
 import { showWord, playAnimation, updateStreak, updateTier,
          updateVignetteOpacity, updateHighScoreDisplay,
          setInputLocked, shakeInput, showAnswer, hideAnswer,
-         showLoading, hideLoading, showLoadError }           from './renderer.js';
+         showLoading, hideLoading, showLoadError,
+         setActiveTab, setPlaceholder }                        from './renderer.js';
 import { playCorrect, playMilestone, playWrong,
-         playCompletion, unlockAudio }                       from './audio.js';
-import { matchAnswer, shuffle }                              from './utils.js';
-import { getHighScore, updateHighScore }                     from './storage.js';
+         playCompletion, unlockAudio }                         from './audio.js';
+import { matchAnswer, shuffle }                                from './utils.js';
+import { getHighScore, updateHighScore }                       from './storage.js';
 
 // ── Timing constants ──────────────────────────────────────────────────────────
 
@@ -21,13 +22,18 @@ const TIMINGS = {
   STREAK_RESET_MS: 1500,
 };
 
+// ── Word pools (loaded once at startup) ──────────────────────────────────────
+
+const allWords = { nouns: [], verbs: [] };
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const state = {
-  words:     [],   // Full word list (loaded once)
-  remaining: [],   // Shuffle queue — refilled when empty
-  current:   null, // Word currently being shown
-  streak:    0,    // Correct answers in a row
+  category:  'nouns', // 'nouns' | 'verbs'
+  words:     [],      // Active word pool for the current category
+  remaining: [],      // Shuffle queue — refilled when empty
+  current:   null,    // Word currently being shown
+  streak:    0,       // Correct answers in a row
   animating: false,
 };
 
@@ -42,6 +48,19 @@ function tierForStreak(streak) {
 
 function vignetteForStreak(streak) {
   return Math.min(streak / 80, 0.85);
+}
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Save the current streak as a high score for the active category if it's a
+ * new record, then update the display. No-op when streak is 0.
+ */
+function persistStreakIfBest() {
+  if (state.streak > 0) {
+    updateHighScore(state.category, state.streak);
+    updateHighScoreDisplay(getHighScore(state.category));
+  }
 }
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
@@ -95,7 +114,7 @@ function handleGuess(raw) {
     return;
   }
 
-  if (matchAnswer(raw, state.current)) {
+  if (matchAnswer(raw, state.current, { caseInsensitive: state.category === 'verbs' })) {
     state.streak += 1;
     state.animating = true;
 
@@ -125,12 +144,32 @@ function handleGuess(raw) {
     }
 
   } else {
-    if (state.streak > 0) {
-      updateHighScore(state.streak);
-      updateHighScoreDisplay(getHighScore());
-    }
+    persistStreakIfBest();
     handleStreakReset(true);
   }
+}
+
+// ── Category switching ────────────────────────────────────────────────────────
+
+function switchCategory(newCategory) {
+  if (newCategory === state.category) return;
+  if (state.animating) return;
+
+  persistStreakIfBest();
+
+  state.category  = newCategory;
+  state.words     = allWords[newCategory];
+  state.streak    = 0;
+  state.remaining = [];
+  state.current   = null;
+
+  setActiveTab(newCategory);
+  setPlaceholder(newCategory === 'verbs' ? 'verb...' : 'noun...');
+  updateStreak(0);
+  updateTier('easy');
+  updateVignetteOpacity(0);
+  updateHighScoreDisplay(getHighScore(newCategory));
+  advance();
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
@@ -186,11 +225,26 @@ async function init() {
     });
   });
 
+  // Category tab buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      unlockAudio();
+      switchCategory(btn.dataset.category);
+    });
+  });
+
   showLoading();
   try {
-    state.words = await loadWords();
+    const [nouns, verbs] = await Promise.all([loadWords(), loadVerbs()]);
+    allWords.nouns = nouns;
+    allWords.verbs = verbs;
+
+    state.category = 'nouns';
+    state.words    = allWords.nouns;
+
     hideLoading();
-    updateHighScoreDisplay(getHighScore());
+    setActiveTab('nouns');
+    updateHighScoreDisplay(getHighScore('nouns'));
     resetState();
   } catch (err) {
     showLoadError(err.message, init);
