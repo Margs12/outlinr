@@ -5,19 +5,30 @@
  *
  * Rules:
  *   - Trim surrounding whitespace
- *   - By default: exact case-sensitive match (required for nouns — "Mann" !== "mann")
- *   - When caseInsensitive is true: .toLowerCase() comparison on both sides
- *     (used for verbs — "Haben" and "haben" are both accepted)
+ *   - Nouns (entries with an `article` field): input must be "article noun"
+ *     — article comparison is case-insensitive ("Der" === "der")
+ *     — noun comparison is case-sensitive ("Mann" !== "mann")
+ *     — exactly one space must separate article and noun
+ *   - Verbs (no `article` field): exact match by default; case-insensitive
+ *     when caseInsensitive option is true
  *   - No umlaut normalisation — ä/ö/ü/ß must be typed correctly
- *   - Articles are not required or checked
  *
- * @param {string}              input
- * @param {{ word: string }}    entry
- * @param {{ caseInsensitive?: boolean }} [options]
+ * @param {string}                           input
+ * @param {{ word: string, article?: string }} entry
+ * @param {{ caseInsensitive?: boolean }}    [options]
  * @returns {boolean}
  */
 export function matchAnswer(input, entry, { caseInsensitive = false } = {}) {
   const trimmed = input.trim();
+
+  if (entry.article) {
+    const spaceIdx = trimmed.indexOf(' ');
+    if (spaceIdx === -1) return false;
+    const inputArticle = trimmed.slice(0, spaceIdx).toLowerCase();
+    const inputWord    = trimmed.slice(spaceIdx + 1);
+    return inputArticle === entry.article && inputWord === entry.word;
+  }
+
   if (caseInsensitive) {
     return trimmed.toLowerCase() === entry.word.toLowerCase();
   }

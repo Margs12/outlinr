@@ -5,11 +5,13 @@ import { showWord, playAnimation, updateStreak, updateTier,
          updateVignetteOpacity, updateHighScoreDisplay,
          setInputLocked, shakeInput, showAnswer, hideAnswer,
          showLoading, hideLoading, showLoadError,
-         setActiveTab, setPlaceholder }                        from './renderer.js';
+         setActiveTab, setPlaceholder,
+         setActiveLevelBtn, showLevelBtns, hideLevelBtns }     from './renderer.js';
 import { playCorrect, playMilestone, playWrong,
          playCompletion, unlockAudio }                         from './audio.js';
 import { matchAnswer, shuffle }                                from './utils.js';
-import { getHighScore, updateHighScore }                       from './storage.js';
+import { getHighScore, updateHighScore,
+         getNounLevel, setNounLevel }                          from './storage.js';
 
 // ── Timing constants ──────────────────────────────────────────────────────────
 
@@ -29,12 +31,13 @@ const allWords = { nouns: [], verbs: [] };
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const state = {
-  category:  'nouns', // 'nouns' | 'verbs'
-  words:     [],      // Active word pool for the current category
-  remaining: [],      // Shuffle queue — refilled when empty
-  current:   null,    // Word currently being shown
-  streak:    0,       // Correct answers in a row
-  animating: false,
+  category:   'nouns', // 'nouns' | 'verbs'
+  nounLevel:  1,       // 1 | 2 — only relevant when category === 'nouns'
+  words:      [],      // Active word pool for the current category + level
+  remaining:  [],      // Shuffle queue — refilled when empty
+  current:    null,    // Word currently being shown
+  streak:     0,       // Correct answers in a row
+  animating:  false,
 };
 
 // ── Tier / vignette helpers ───────────────────────────────────────────────────
@@ -51,6 +54,16 @@ function vignetteForStreak(streak) {
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
+
+/** Return words for a given noun level (rank 1–100 = lvl 1, 101–200 = lvl 2). */
+function nounWordsForLevel(level) {
+  return allWords.nouns.filter(w => level === 1 ? w.rank <= 100 : w.rank > 100);
+}
+
+/** The full correct answer string shown on a miss ("der Mann", "haben", etc.). */
+function correctAnswerText(entry) {
+  return entry.article ? `${entry.article} ${entry.word}` : entry.word;
+}
 
 /**
  * Save the current streak as a high score for the active category if it's a
@@ -96,7 +109,7 @@ function handleStreakReset(doShake) {
   playWrong().catch(e => console.error('[audio] playWrong failed:', e));
   setInputLocked(true);
   if (doShake) shakeInput();
-  showAnswer(state.current.word);
+  showAnswer(correctAnswerText(state.current));
 
   setTimeout(() => {
     hideAnswer();
@@ -129,9 +142,30 @@ function handleGuess(raw) {
       playMilestone().catch(e => console.error('[audio] playMilestone failed:', e));
       playAnimation('milestone');
       setTimeout(() => {
-        advance();
-        state.animating = false;
-        setInputLocked(false);
+        // Level 1 complete — auto-advance to level 2
+        if (state.category === 'nouns' && state.nounLevel === 1 && state.streak === 100) {
+          persistStreakIfBest();
+          setNounLevel(2);
+          state.nounLevel  = 2;
+          state.words      = nounWordsForLevel(2);
+          state.streak     = 0;
+          state.remaining  = [];
+          updateStreak(0);
+          updateTier('easy');
+          updateVignetteOpacity(0);
+          setActiveLevelBtn(2);
+          showAnswer('level 2!');
+          setTimeout(() => {
+            hideAnswer();
+            advance();
+            state.animating = false;
+            setInputLocked(false);
+          }, TIMINGS.STREAK_RESET_MS);
+        } else {
+          advance();
+          state.animating = false;
+          setInputLocked(false);
+        }
       }, TIMINGS.MILESTONE_MS);
     } else {
       playCorrect().catch(e => console.error('[audio] playCorrect failed:', e));
@@ -149,6 +183,29 @@ function handleGuess(raw) {
   }
 }
 
+// ── Level switching (nouns only) ──────────────────────────────────────────────
+
+function switchLevel(newLevel) {
+  if (newLevel === state.nounLevel) return;
+  if (state.animating) return;
+
+  persistStreakIfBest();
+  setNounLevel(newLevel);
+
+  state.nounLevel  = newLevel;
+  state.words      = nounWordsForLevel(newLevel);
+  state.streak     = 0;
+  state.remaining  = [];
+  state.current    = null;
+
+  setActiveLevelBtn(newLevel);
+  updateStreak(0);
+  updateTier('easy');
+  updateVignetteOpacity(0);
+  updateHighScoreDisplay(getHighScore('nouns'));
+  advance();
+}
+
 // ── Category switching ────────────────────────────────────────────────────────
 
 function switchCategory(newCategory) {
@@ -158,13 +215,23 @@ function switchCategory(newCategory) {
   persistStreakIfBest();
 
   state.category  = newCategory;
-  state.words     = allWords[newCategory];
   state.streak    = 0;
   state.remaining = [];
   state.current   = null;
 
+  if (newCategory === 'nouns') {
+    state.nounLevel = getNounLevel();
+    state.words     = nounWordsForLevel(state.nounLevel);
+    setActiveLevelBtn(state.nounLevel);
+    showLevelBtns();
+    setPlaceholder('article noun...');
+  } else {
+    state.words = allWords[newCategory];
+    hideLevelBtns();
+    setPlaceholder('verb...');
+  }
+
   setActiveTab(newCategory);
-  setPlaceholder(newCategory === 'verbs' ? 'verb...' : 'noun...');
   updateStreak(0);
   updateTier('easy');
   updateVignetteOpacity(0);
@@ -233,17 +300,28 @@ async function init() {
     });
   });
 
+  // Level buttons (nouns only)
+  document.querySelectorAll('.level-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      unlockAudio();
+      switchLevel(parseInt(btn.dataset.level, 10));
+    });
+  });
+
   showLoading();
   try {
     const [nouns, verbs] = await Promise.all([loadWords(), loadVerbs()]);
     allWords.nouns = nouns;
     allWords.verbs = verbs;
 
-    state.category = 'nouns';
-    state.words    = allWords.nouns;
+    state.category  = 'nouns';
+    state.nounLevel = getNounLevel();
+    state.words     = nounWordsForLevel(state.nounLevel);
 
     hideLoading();
     setActiveTab('nouns');
+    setActiveLevelBtn(state.nounLevel);
+    setPlaceholder('article noun...');
     updateHighScoreDisplay(getHighScore('nouns'));
     resetState();
   } catch (err) {

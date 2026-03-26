@@ -142,3 +142,21 @@ export function setActiveTab(category) {
 export function setPlaceholder(text) {
   guessInput.placeholder = text;
 }
+
+/**
+ * Mark the given noun level button as active; deactivate the other.
+ * @param {1|2} level
+ */
+export function setActiveLevelBtn(level) {
+  document.querySelectorAll('.level-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.level, 10) === level);
+  });
+}
+
+export function showLevelBtns() {
+  document.getElementById('level-tabs').style.display = 'flex';
+}
+
+export function hideLevelBtns() {
+  document.getElementById('level-tabs').style.display = 'none';
+}

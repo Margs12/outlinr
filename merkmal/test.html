@@ -99,24 +99,36 @@
       }
     }
 
-    // ── matchAnswer() — case-sensitive (noun behaviour) ────────────────────────
+    // ── matchAnswer() — nouns (article required) ──────────────────────────────
 
-    suite('matchAnswer() — case-sensitive (nouns)');
+    suite('matchAnswer() — nouns (article required)');
 
-    const mann = { word: 'Mann' };
-    const zeit = { word: 'Zeit' };
+    const mann = { word: 'Mann', article: 'der' };
+    const zeit = { word: 'Zeit', article: 'die' };
 
-    test('exact match returns true', () =>
-      assert(matchAnswer('Mann', mann)));
+    test('"der Mann" returns true', () =>
+      assert(matchAnswer('der Mann', mann)));
 
     test('leading/trailing whitespace is trimmed', () =>
-      assert(matchAnswer('  Mann  ', mann)));
+      assert(matchAnswer('  der Mann  ', mann)));
 
-    test('lowercase input returns false (nouns are capitalised)', () =>
-      assert(!matchAnswer('mann', mann)));
+    test('article case-insensitive: "Der Mann" returns true', () =>
+      assert(matchAnswer('Der Mann', mann)));
 
-    test('wrong word returns false', () =>
-      assert(!matchAnswer('Zeit', mann)));
+    test('article case-insensitive: "DER Mann" returns true', () =>
+      assert(matchAnswer('DER Mann', mann)));
+
+    test('noun-only input (missing article) returns false', () =>
+      assert(!matchAnswer('Mann', mann)));
+
+    test('wrong article returns false', () =>
+      assert(!matchAnswer('die Mann', mann)));
+
+    test('wrong noun (correct article) returns false', () =>
+      assert(!matchAnswer('der Zeit', mann)));
+
+    test('lowercase noun returns false', () =>
+      assert(!matchAnswer('der mann', mann)));
 
     test('empty input returns false', () =>
       assert(!matchAnswer('', mann)));
@@ -124,11 +136,11 @@
     test('whitespace-only input returns false', () =>
       assert(!matchAnswer('   ', mann)));
 
-    test('default (no options arg) is case-sensitive', () =>
-      assert(!matchAnswer('mann', mann), 'no options → case-sensitive'));
+    test('article-only (no noun) returns false', () =>
+      assert(!matchAnswer('der', mann)));
 
-    test('explicit { caseInsensitive: false } is case-sensitive', () =>
-      assert(!matchAnswer('mann', mann, { caseInsensitive: false })));
+    test('extra space between article and noun returns false', () =>
+      assert(!matchAnswer('der  Mann', mann)));
 
     // ── matchAnswer() — case-insensitive (verb behaviour) ─────────────────────
 
@@ -164,11 +176,11 @@
     test('ß: Heißen matches heißen case-insensitively', () =>
       assert(matchAnswer('Heißen', heissen, { caseInsensitive: true })));
 
-    // Noun regression: nouns must NOT become case-insensitive
-    test('noun regression: mann does NOT match Mann (flag absent)', () =>
+    // Noun regression: partial input must not match (article always required)
+    test('noun regression: bare "mann" does not match (no article)', () =>
       assert(!matchAnswer('mann', mann)));
 
-    test('noun regression: zeit does NOT match Zeit (flag absent)', () =>
+    test('noun regression: bare "zeit" does not match (no article)', () =>
       assert(!matchAnswer('zeit', zeit)));
 
     // ── shuffle() ─────────────────────────────────────────────────────────────
@@ -314,6 +326,54 @@
         NOUN_HIGH_SCORE_KEY !== VERB_HIGH_SCORE_KEY,
         'noun and verb keys must differ'
       );
+    });
+
+    // ── words.json — structural integrity ─────────────────────────────────────
+
+    suite('words.json — structural integrity');
+
+    await testAsync('loads as a non-empty array of 200 entries', async () => {
+      const res = await fetch('./data/words.json');
+      assert(res.ok, `fetch failed with status ${res.status}`);
+      const nouns = await res.json();
+      assert(Array.isArray(nouns), 'words.json must be an array');
+      assertEqual(nouns.length, 200, `expected 200 nouns, got ${nouns.length}`);
+    });
+
+    await testAsync('all entries have required fields of correct types', async () => {
+      const nouns = await fetch('./data/words.json').then(r => r.json());
+      for (const [i, n] of nouns.entries()) {
+        assert(typeof n.id      === 'string' && n.id.length > 0,    `entry ${i}: id must be a non-empty string`);
+        assert(typeof n.rank    === 'number',                         `entry ${i}: rank must be a number`);
+        assert(typeof n.article === 'string' && ['der','die','das'].includes(n.article),
+          `entry ${i}: article must be "der", "die", or "das"`);
+        assert(typeof n.word    === 'string' && n.word.length > 0,   `entry ${i}: word must be a non-empty string`);
+        assert(typeof n.emoji   === 'string' && n.emoji.length > 0,  `entry ${i}: emoji must be a non-empty string`);
+        assert(Array.isArray(n.hints) && n.hints.length > 0,         `entry ${i}: hints must be a non-empty array`);
+      }
+    });
+
+    await testAsync('all ranks 1–200 are present (no gaps, no duplicates)', async () => {
+      const nouns = await fetch('./data/words.json').then(r => r.json());
+      const ranks = nouns.map(n => n.rank).sort((a, b) => a - b);
+      for (let i = 0; i < 200; i++) {
+        assertEqual(ranks[i], i + 1, `expected rank ${i + 1} at position ${i}`);
+      }
+    });
+
+    await testAsync('all ids are unique', async () => {
+      const nouns = await fetch('./data/words.json').then(r => r.json());
+      const ids   = nouns.map(n => n.id);
+      const unique = new Set(ids);
+      assertEqual(unique.size, ids.length, `duplicate ids: ${ids.filter((id, i) => ids.indexOf(id) !== i)}`);
+    });
+
+    await testAsync('level 1 = ranks 1–100, level 2 = ranks 101–200', async () => {
+      const nouns = await fetch('./data/words.json').then(r => r.json());
+      const lvl1  = nouns.filter(n => n.rank <= 100);
+      const lvl2  = nouns.filter(n => n.rank > 100);
+      assertEqual(lvl1.length, 100, `expected 100 level-1 nouns, got ${lvl1.length}`);
+      assertEqual(lvl2.length, 100, `expected 100 level-2 nouns, got ${lvl2.length}`);
     });
 
     // ── verbs.json — structural integrity ─────────────────────────────────────

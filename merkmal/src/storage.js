@@ -2,6 +2,7 @@
 
 export const NOUN_HIGH_SCORE_KEY = 'merkmal_nouns_high_score';
 export const VERB_HIGH_SCORE_KEY = 'merkmal_verbs_high_score';
+export const NOUN_LEVEL_KEY      = 'merkmal_nouns_level';
 
 /**
  * Return the localStorage key for a given category.
@@ -39,4 +40,20 @@ export function updateHighScore(category, streak) {
   if (streak <= getHighScore(category)) return false;
   localStorage.setItem(scoreKey(category), streak);
   return true;
+}
+
+/**
+ * Return the saved noun level (1 or 2). Defaults to 1 if nothing stored.
+ * @returns {1|2}
+ */
+export function getNounLevel() {
+  return localStorage.getItem(NOUN_LEVEL_KEY) === '2' ? 2 : 1;
+}
+
+/**
+ * Persist the noun level to localStorage.
+ * @param {1|2} level
+ */
+export function setNounLevel(level) {
+  localStorage.setItem(NOUN_LEVEL_KEY, level);
 }

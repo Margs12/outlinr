@@ -69,6 +69,35 @@ body {
   color: #f0f0f0;
 }
 
+/* ── Level tabs ──────────────────────────────────────────── */
+#level-tabs {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.level-btn {
+  background: none;
+  border: 1px solid #282828;
+  color: #444;
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.level-btn:hover {
+  border-color: #666;
+  color: #c0c0c0;
+}
+
+.level-btn.active {
+  border-color: #888;
+  color: #c0c0c0;
+}
+
 /* ── Header ──────────────────────────────────────────────── */
 header {
   display: flex;
